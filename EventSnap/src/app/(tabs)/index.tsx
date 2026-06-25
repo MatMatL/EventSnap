@@ -62,7 +62,7 @@ export default function MapScreen() {
       </SafeAreaView>
 
       <View style={styles.mapContainer}>
-        {Platform.OS !== 'web' && !isLoading && !fetchError && (
+        {Platform.OS !== 'web' && (
           <EventMap
             userCoords={coords}
             events={filteredEvents}
@@ -80,7 +80,7 @@ export default function MapScreen() {
         )}
 
         {isLoading && (
-          <View style={styles.overlay}>
+          <View style={styles.overlay} pointerEvents="none">
             <ActivityIndicator size="large" color={Colors.primary} />
             <Text style={styles.overlayText}>Chargement de la carte…</Text>
           </View>
@@ -95,26 +95,28 @@ export default function MapScreen() {
             </TouchableOpacity>
           </View>
         )}
+
+        {permissionDenied && !locationLoading && (
+          <View style={styles.permissionBanner}>
+            <Text style={styles.permissionText}>
+              {locationError ?? 'Localisation désactivée — position par défaut affichée.'}
+            </Text>
+            <TouchableOpacity onPress={retryLocation}>
+              <Text style={styles.permissionAction}>Autoriser</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {!isLoading && !fetchError && (
+          <View style={styles.sheetOverlay}>
+            <NearbyEventsSheet
+              events={filteredEvents}
+              selectedEventId={selectedEventId}
+              onSelectEvent={setSelectedEventId}
+            />
+          </View>
+        )}
       </View>
-
-      {permissionDenied && !locationLoading && (
-        <View style={styles.permissionBanner}>
-          <Text style={styles.permissionText}>
-            {locationError ?? 'Localisation désactivée — position par défaut affichée.'}
-          </Text>
-          <TouchableOpacity onPress={retryLocation}>
-            <Text style={styles.permissionAction}>Autoriser</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {!isLoading && !fetchError && (
-        <NearbyEventsSheet
-          events={filteredEvents}
-          selectedEventId={selectedEventId}
-          onSelectEvent={setSelectedEventId}
-        />
-      )}
     </View>
   );
 }
@@ -131,6 +133,7 @@ const styles = StyleSheet.create({
   mapContainer: {
     flex: 1,
     position: 'relative',
+    overflow: 'hidden',
   },
   overlay: {
     ...StyleSheet.absoluteFill,
@@ -138,7 +141,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
-    zIndex: 1,
+    zIndex: 2,
   },
   overlayText: {
     marginTop: 12,
@@ -172,18 +175,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   permissionBanner: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 240,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    marginHorizontal: 16,
-    marginBottom: 8,
     paddingHorizontal: 14,
     paddingVertical: 10,
     backgroundColor: '#FFF3E8',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#FFD9C2',
+    zIndex: 3,
   },
   permissionText: {
     flex: 1,
@@ -195,6 +201,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: Colors.coral,
+  },
+  sheetOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 3,
   },
   webFallback: {
     flex: 1,
