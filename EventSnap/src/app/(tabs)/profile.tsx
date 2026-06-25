@@ -4,8 +4,6 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy'; // Fix de l'erreur d'API obsolète
-import { decode } from 'base64-arraybuffer';
 
 const { width } = Dimensions.get('window');
 
@@ -29,7 +27,6 @@ export default function ProfileScreen() {
       
       if (!user) return;
 
-      // 1. Récupération du profil utilisateur
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -41,20 +38,10 @@ export default function ProfileScreen() {
       setProfile(profileData);
       setUsername(profileData.username || '');
 
-      // 2. Récupération du nombre réel d'événements créés
-      const { count: events } = await supabase
-        .from('events')
-        .select('*', { count: 'exact', head: true })
-        .eq('host_id', user.id);
-      
+      const { count: events } = await supabase.from('events').select('*', { count: 'exact', head: true }).eq('host_id', user.id);
       setEventCount(events || 0);
 
-      // 3. Récupération du nombre réel de photos partagées
-      const { count: photos } = await supabase
-        .from('photos')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-
+      const { count: photos } = await supabase.from('photos').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
       setPhotoCount(photos || 0);
 
     } catch (error: any) {
@@ -64,50 +51,53 @@ export default function ProfileScreen() {
     }
   }
 
-  // Fonction pour changer l'avatar
   async function uploadAvatar() {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.6,
+  try {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'], 
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.6,
+    });
+
+    if (result.canceled || !result.assets || result.assets.length === 0) return;
+
+    setUploading(true);
+    const img = result.assets[0];
+    
+    const response = await fetch(img.uri);
+    const blob = await response.blob()
+    
+    const filePath = `${profile.id}/avatar.jpg`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, blob, { 
+        contentType: img.mimeType || 'image/jpeg', 
+        upsert: true
       });
 
-      if (result.canceled) return;
+    if (uploadError) throw uploadError;
 
-      setUploading(true);
-      const img = result.assets[0];
-      
-      // Utilisation sécurisée de l'API legacy demandée par Expo v54+
-      const base64 = await FileSystem.readAsStringAsync(img.uri, { encoding: 'base64' });
-      const filePath = `${profile.id}/avatar_${Date.now()}.jpg`;
+    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
+    const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, decode(base64), { contentType: 'image/jpeg', upsert: true });
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ avatar_url: publicUrl })
+      .eq('id', profile.id);
 
-      if (uploadError) throw uploadError;
+    if (updateError) throw updateError;
 
-      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
-
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ avatar_url: publicUrl })
-        .eq('id', profile.id);
-
-      if (updateError) throw updateError;
-
-      Alert.alert('Succès', 'Votre photo de profil a été mise à jour !');
-      fetchProfileData();
-    } catch (error: any) {
-      Alert.alert('Erreur d\'upload', error.message);
-    } finally {
-      setUploading(false);
-    }
+    Alert.alert('Succès', 'Votre photo de profil a été mise à jour !');
+    fetchProfileData();
+  } catch (error: any) {
+    Alert.alert('Erreur d\'upload', error.message);
+  } finally {
+    setUploading(false);
   }
+}
 
-  // Enregistrer le nouveau nom d'utilisateur
   async function saveProfileUpdate() {
     if (!username.trim()) {
       Alert.alert('Erreur', 'Le pseudo ne peut pas être vide.');
@@ -115,11 +105,7 @@ export default function ProfileScreen() {
     }
     try {
       setLoading(true);
-      const { error } = await supabase
-        .from('profiles')
-        .update({ username: username.trim() })
-        .eq('id', profile.id);
-
+      const { error } = await supabase.from('profiles').update({ username: username.trim() }).eq('id', profile.id);
       if (error) throw error;
       setEditing(false);
       fetchProfileData();
@@ -138,9 +124,8 @@ export default function ProfileScreen() {
     );
   }
 
-  // Calculs pour la barre de stockage (Limite de 2GB par défaut)
   const storageUsedBytes = profile?.storage_used_bytes || 0;
-  const storageLimitBytes = 2 * 1024 * 1024 * 1024; // 2 GB en octets
+  const storageLimitBytes = 2 * 1024 * 1024 * 1024;
   const storageUsedMB = (storageUsedBytes / (1024 * 1024)).toFixed(1);
   const storageLimitMB = (storageLimitBytes / (1024 * 1024)).toFixed(0);
   const storagePercentage = Math.min((storageUsedBytes / storageLimitBytes) * 100, 100);
@@ -150,7 +135,6 @@ export default function ProfileScreen() {
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           
-          {/* Top Title Bar */}
           <View style={styles.topBar}>
             <Text style={styles.topLogo}>EventSnap</Text>
             <TouchableOpacity style={styles.settingsButton}>
@@ -158,7 +142,6 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Profil Avatar Section */}
           <View style={styles.avatarSection}>
             <TouchableOpacity style={styles.avatarWrapper} onPress={uploadAvatar} disabled={uploading}>
               {profile?.avatar_url ? (
@@ -177,15 +160,9 @@ export default function ProfileScreen() {
               )}
             </TouchableOpacity>
 
-            {/* Modification dynamique du Username */}
             {editing ? (
               <View style={styles.editInputRow}>
-                <TextInput
-                  style={styles.usernameInput}
-                  value={username}
-                  onChangeText={setUsername}
-                  autoCapitalize="none"
-                />
+                <TextInput style={styles.usernameInput} value={username} onChangeText={setUsername} autoCapitalize="none" />
                 <TouchableOpacity style={styles.saveActionBtn} onPress={saveProfileUpdate}>
                   <Feather name="check" size={18} color="#FFF" />
                 </TouchableOpacity>
@@ -199,7 +176,6 @@ export default function ProfileScreen() {
             <Text style={styles.profileHandle}>@{profile?.username?.toLowerCase() || 'user'}</Text>
           </View>
 
-          {/* Vraies Stats Récupérées de la DB */}
           <View style={styles.statsContainer}>
             <View style={styles.statBox}>
               <Text style={styles.statVal}>{eventCount}</Text>
@@ -212,7 +188,6 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {/* Carte Espace Stockage */}
           <View style={styles.card}>
             <View style={styles.cardHeaderRow}>
               <View style={styles.cardTitleGroup}>
@@ -224,7 +199,6 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            {/* Barre de progression dynamique */}
             <View style={styles.progressContainer}>
               <View style={[styles.progressBarFill, { width: `${storagePercentage}%` }]} />
             </View>
@@ -235,13 +209,11 @@ export default function ProfileScreen() {
             <Text style={styles.storageTip}>{(100 - storagePercentage).toFixed(0)}% storage remaining for your snaps.</Text>
           </View>
 
-          {/* Upgrade Action Button */}
           <TouchableOpacity style={styles.upgradeBtn}>
             <Feather name="zap" size={16} color="#FFF" style={{ marginRight: 8 }} />
             <Text style={styles.upgradeBtnText}>UPGRADE TO PREMIUM</Text>
           </TouchableOpacity>
 
-          {/* Menu d'options listé */}
           <View style={styles.menuCard}>
             <TouchableOpacity style={styles.menuItem}>
               <Ionicons name="options-outline" size={20} color="#335C58" />
@@ -279,9 +251,9 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 40 },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   topLogo: { fontSize: 24, fontWeight: '800', color: '#335C58' },
-  settingsButton: { backgroundColor: '#FFFFFF', padding: 8, borderRadius: 10, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4 },
+  settingsButton: { backgroundColor: '#FFFFFF', padding: 8, borderRadius: 10, elevation: 1, boxShadow: '0px 2px 4px rgba(0,0,0,0.05)' },
   avatarSection: { alignItems: 'center', marginBottom: 24 },
-  avatarWrapper: { width: 100, height: 100, borderRadius: 50, position: 'relative', elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8 },
+  avatarWrapper: { width: 100, height: 100, borderRadius: 50, position: 'relative', elevation: 4, boxShadow: '0px 4px 8px rgba(0,0,0,0.1)' },
   avatarImage: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#FFF' },
   avatarPlaceholder: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#E8E5DC', justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#FFF' },
   avatarLoading: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 50, justifyContent: 'center', alignItems: 'center' },
@@ -293,11 +265,11 @@ const styles = StyleSheet.create({
   usernameInput: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E8E5DC', borderRadius: 8, paddingHorizontal: 12, height: 36, width: 160, fontSize: 15, fontWeight: '600', color: '#333' },
   saveActionBtn: { backgroundColor: '#335C58', marginLeft: 8, height: 36, width: 36, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   statsContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: 16, paddingVertical: 12, marginBottom: 24 },
-  statBox: { alignItems: 'center', px: 24, width: '40%' },
+  statBox: { alignItems: 'center', width: '40%' },
   statVal: { fontSize: 20, fontWeight: '800', color: '#335C58' },
   statLbl: { fontSize: 10, fontWeight: '700', color: '#777', marginTop: 2 },
   statDivider: { width: 1, height: 28, backgroundColor: '#D1DBD7' },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 16, boxShadow: '0px 4px 10px rgba(0,0,0,0.04)', elevation: 2 },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   cardTitleGroup: { flexDirection: 'row', alignItems: 'center' },
   cardTitleText: { fontSize: 15, fontWeight: '700', color: '#333' },
@@ -308,9 +280,9 @@ const styles = StyleSheet.create({
   storageLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   storageMetrics: { fontSize: 12, fontWeight: '600', color: '#666' },
   storageTip: { fontSize: 11, fontStyle: 'italic', color: '#888' },
-  upgradeBtn: { backgroundColor: '#EF6C4A', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', height: 50, borderRadius: 25, marginBottom: 24, shadowColor: '#EF6C4A', shadowOpacity: 0.2, shadowRadius: 6, elevation: 3 },
+  upgradeBtn: { backgroundColor: '#EF6C4A', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', height: 50, borderRadius: 25, marginBottom: 24, boxShadow: '0px 4px 6px rgba(239,108,74,0.2)', elevation: 3 },
   upgradeBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
-  menuCard: { backgroundColor: '#FFFFFF', borderRadius: 24, paddingVertical: 8, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 },
+  menuCard: { backgroundColor: '#FFFFFF', borderRadius: 24, paddingVertical: 8, boxShadow: '0px 4px 10px rgba(0,0,0,0.04)', elevation: 2 },
   menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 20 },
   menuItemText: { flex: 1, marginLeft: 14, fontSize: 15, fontWeight: '600', color: '#333' },
   menuLineDivider: { height: 1, backgroundColor: '#F4F2EB', marginHorizontal: 20 }
