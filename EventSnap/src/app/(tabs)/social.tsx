@@ -10,7 +10,6 @@ export default function SocialScreen() {
   const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'suggestions'>('friends');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   
-  // États pour les données réelles de la DB
   const [friends, setFriends] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -40,7 +39,6 @@ export default function SocialScreen() {
     }
   }
 
-  // 1. LIRE LES AMIS RÉELS (Statut: 'accepted')
   async function fetchFriends(userId: string) {
     const { data, error } = await supabase
       .from('friendships')
@@ -54,12 +52,10 @@ export default function SocialScreen() {
 
     if (error) throw error;
 
-    // Filtrer pour obtenir le profil de l'ami et non le sien
     const formattedFriends = data.map((f: any) => {
       return f.sender.id === userId ? f.receiver : f.sender;
     });
 
-    // Appliquer le filtre de recherche textuelle si nécessaire
     if (searchQuery.trim()) {
       setFriends(formattedFriends.filter(f => f.username.toLowerCase().includes(searchQuery.toLowerCase())));
     } else {
@@ -67,7 +63,6 @@ export default function SocialScreen() {
     }
   }
 
-  // 2. LIRE LES DEMANDES REÇUES (Statut: 'pending' et destinataire = moi)
   async function fetchIncomingRequests(userId: string) {
     const { data, error } = await supabase
       .from('friendships')
@@ -83,9 +78,7 @@ export default function SocialScreen() {
     setRequests(data || []);
   }
 
-  // 3. RECHERCHE GLOBALE / SUGGESTIONS (Profils qui ne sont pas encore en relation avec moi)
   async function fetchSuggestions(userId: string) {
-    // Récupérer d'abord toutes mes relations existantes (Amis ou Demandes en cours)
     const { data: relations } = await supabase
       .from('friendships')
       .select('sender_id, receiver_id')
@@ -100,14 +93,12 @@ export default function SocialScreen() {
     let query = supabase.from('profiles').select('id, username, avatar_url');
 
     if (searchQuery.trim()) {
-      // Si l'utilisateur tape une recherche
       query = query.ilike('username', `%${searchQuery.trim()}%`);
     }
 
     const { data: profiles, error } = await query.limit(15);
     if (error) throw error;
 
-    // Filtrer les profils pour exclure soi-même et les relations déjà existantes
     const filteredSuggestions = (profiles || []).filter((p: any) => !excludedUserIds.has(p.id));
     setSuggestions(filteredSuggestions);
   }
@@ -128,7 +119,6 @@ export default function SocialScreen() {
     }
   }
 
-  // ACTION : ACCEPTER UNE DEMANDE D'AMI
   async function handleAcceptRequest(friendshipId: string) {
     try {
       const { error } = await supabase
