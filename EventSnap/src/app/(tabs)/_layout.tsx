@@ -6,13 +6,11 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#2BA8A2',
+        tabBarActiveTintColor: '#335C58',
         tabBarInactiveTintColor: '#A0A0A0',
         tabBarLabelStyle: styles.tabLabel,
         tabBarStyle: styles.tabBar,
-        headerStyle: styles.header,
-        headerTitleStyle: styles.headerTitle,
-        headerShadowVisible: false,
+        headerShown: false,
       }}
     >
       <Tabs.Screen
@@ -68,9 +66,9 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: '#FFF8E7',
+    backgroundColor: '#E5F0ED',
     borderTopWidth: 1,
-    borderTopColor: '#E8E5DC',
+    borderTopColor: '#D1DBD7',
     height: Platform.OS === 'ios' ? 88 : 68,
     paddingBottom: Platform.OS === 'ios' ? 30 : 12,
     paddingTop: 8,
@@ -86,20 +84,8 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#EF6C4A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
     elevation: 4,
     marginTop: Platform.OS === 'ios' ? -10 : -14,
-  },
-  header: {
-    backgroundColor: '#FFF8E7',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#335C58',
-    letterSpacing: -0.5,
+    boxShadow: '0px 4px 6px rgba(239, 108, 74, 0.3)', 
   },
 });

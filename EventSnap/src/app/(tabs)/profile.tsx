@@ -136,7 +136,7 @@ export default function ProfileScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           
           <View style={styles.topBar}>
-            <Text style={styles.topLogo}>EventSnap</Text>
+            <Text style={styles.topLogo}>Profile</Text>
             <TouchableOpacity style={styles.settingsButton}>
               <Ionicons name="settings-outline" size={22} color="#335C58" />
             </TouchableOpacity>
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
   avatarWrapper: { width: 100, height: 100, borderRadius: 50, position: 'relative', elevation: 4, boxShadow: '0px 4px 8px rgba(0,0,0,0.1)' },
   avatarImage: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#FFF' },
   avatarPlaceholder: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#E8E5DC', justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#FFF' },
-  avatarLoading: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 50, justifyContent: 'center', alignItems: 'center' },
+  avatarLoading: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 50, justifyContent: 'center', alignItems: 'center' },
   editPencilBadge: { position: 'absolute', bottom: 2, right: 2, backgroundColor: '#EF6C4A', width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
   nameRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
   profileName: { fontSize: 22, fontWeight: '800', color: '#335C58' },
