@@ -1,13 +1,28 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useRouter, Slot } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 export default function RootLayout() {
   const router = useRouter();
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    // 1. Charger la session depuis AsyncStorage AVANT tout rendu de route.
+    //    Sans ça, les premières requêtes Supabase partent sans JWT (rôle anon).
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        router.replace('/(tabs)');
+      } else {
+        router.replace('/(auth)/login');
+      }
+      setReady(true);
+    });
+
+    // 2. Écouter les changements d'état ultérieurs (déconnexion, refresh token…)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION') return; // déjà géré au-dessus
       if (session) {
         router.replace('/(tabs)');
       } else {
@@ -20,7 +35,13 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <Slot />
+      {!ready ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF8E7' }}>
+          <ActivityIndicator color="#335C58" size="large" />
+        </View>
+      ) : (
+        <Slot />
+      )}
     </SafeAreaProvider>
   );
 }

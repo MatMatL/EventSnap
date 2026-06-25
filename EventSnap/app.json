@@ -33,6 +33,13 @@
     "plugins": [
       "expo-router",
       [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "EventSnap utilise votre position pour localiser vos événements.",
+          "locationWhenInUsePermission": "EventSnap utilise votre position pour localiser vos événements."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",
