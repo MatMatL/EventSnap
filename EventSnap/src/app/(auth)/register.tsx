@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, SafeAreaView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -14,18 +14,30 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   async function handleSignUp() {
+    setErrorMessage(null);
+
     if (!username.trim() || !email.trim() || !password || !confirmPassword) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
+      setErrorMessage("Veuillez remplir tous les champs.");
       return;
     }
+
+    // Validation du format du pseudo (3-30 caractères, lettres, chiffres, _)
+    const usernameRegex = /^[a-zA-Z0-9_]{3,30}$/;
+    if (!usernameRegex.test(username.trim())) {
+      setErrorMessage("Le pseudo doit faire entre 3 et 30 caractères (lettres, chiffres et _ uniquement).");
+      return;
+    }
+
     if (password.length < 6) {
-      Alert.alert('Sécurité', 'Le mot de passe doit contenir au moins 6 caractères.');
+      setErrorMessage("Le mot de passe doit contenir au moins 6 caractères.");
       return;
     }
+
     if (password !== confirmPassword) {
-      Alert.alert('Erreur', 'Les mots de passe ne correspondent pas.');
+      setErrorMessage("Les mots de passe ne correspondent pas.");
       return;
     }
 
@@ -37,16 +49,16 @@ export default function RegisterScreen() {
       options: { data: { username: username.trim() } }
     });
 
-    setLoading(false);
-
     if (error) {
-      let errorMessage = error.message;
-      if (error.message.includes('already registered')) {
-        errorMessage = "Cet e-mail est déjà utilisé.";
+      setLoading(false);
+      if (error.message.includes('already registered') || error.status === 422) {
+        setErrorMessage("Cet e-mail est déjà utilisé.");
+      } else {
+        setErrorMessage(error.message);
       }
-      Alert.alert('Erreur d\'inscription', errorMessage);
     } else {
-      Alert.alert('Succès', 'Compte créé ! Veuillez vous connecter.');
+      // Si "Confirm email" est désactivé sur Supabase, la session s'ouvre, sinon redirection login
+      setLoading(false);
       router.replace('/login');
     }
   }
@@ -63,7 +75,7 @@ export default function RegisterScreen() {
           <Text style={styles.title}>Créer un compte</Text>
           <Text style={styles.subtitle}>Rejoignez EventSnap et commencez à capturer vos événements.</Text>
 
-          {/* Nom d'utilisateur (Pseudo indispensable pour le Trigger SQL) */}
+          {/* Nom d'utilisateur */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Nom d'utilisateur</Text>
             <View style={styles.inputWrapper}>
@@ -129,6 +141,9 @@ export default function RegisterScreen() {
             </View>
           </View>
 
+          {/* Message d'erreur intégré au-dessus du bouton */}
+          {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
+
           {/* Bouton d'action */}
           <TouchableOpacity style={styles.primaryButton} onPress={handleSignUp} disabled={loading}>
             {loading ? (
@@ -178,12 +193,12 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F4F2EB',
     borderWidth: 1,
     borderColor: '#E8E5DC',
     borderRadius: 12,
     paddingHorizontal: 16,
-    height: 48,
+    height: 52,
   },
   iconLeft: { marginRight: 12 },
   input: { flex: 1, fontSize: 15, color: '#333', fontWeight: '500' },
@@ -197,6 +212,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  errorText: { color: '#D9534F', fontSize: 13, textAlign: 'center', marginBottom: 12, fontWeight: '600' },
   footer: { marginTop: 24 },
   footerText: { fontSize: 14, color: '#555' },
   footerLink: { color: '#335C58', fontWeight: '700' }

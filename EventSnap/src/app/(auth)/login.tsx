@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Dimensions, SafeAreaView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
@@ -13,39 +13,33 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   async function handleSignIn() {
-    // 1. Validation locale simple avant l'appel API
+    setErrorMessage(null);
+    
     if (!email.trim() || !password) {
-      Alert.alert('Champs requis', 'Veuillez remplir votre e-mail et votre mot de passe.');
+      setErrorMessage("Veuillez remplir tous les champs.");
       return;
     }
 
     setLoading(true);
-    
-    // 2. Tentative de connexion
     const { error } = await supabase.auth.signInWithPassword({ 
       email: email.trim(), 
       password 
     });
-
-    setLoading(false);
-
+    
     if (error) {
-      // 3. Gestion des erreurs spécifiques de Supabase
-      let errorMessage = "Une erreur est survenue lors de la connexion.";
-      
-      if (error.message.includes('Invalid login credentials')) {
-        errorMessage = "E-mail ou mot de passe incorrect.";
+      setLoading(false);
+      if (error.message === 'Invalid login credentials') {
+        setErrorMessage("E-mail ou mot de passe incorrect.");
       } else if (error.message.includes('Email not confirmed')) {
-        errorMessage = "Veuillez confirmer votre adresse e-mail avant de vous connecter.";
+        setErrorMessage("Veuillez confirmer votre adresse e-mail avant de continuer.");
       } else {
-        errorMessage = error.message; // Affiche le message brut si spécifique
+        setErrorMessage(error.message);
       }
-      
-      Alert.alert('Erreur de connexion', errorMessage);
     } else {
-      // Succès
+      setLoading(false);
       router.replace('/(tabs)');
     }
   }
@@ -53,21 +47,24 @@ export default function LoginScreen() {
   return (
     <LinearGradient colors={['#E3EAE5', '#F5F3EB']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
+        
         <View style={styles.header}>
           <View style={styles.cameraIconWrapper}>
             <Feather name="camera" size={24} color="#335C58" />
           </View>
           <Text style={styles.logo}>EventSnap</Text>
+          <Text style={styles.subtitle}>S'AUTHENTIFIER</Text>
         </View>
 
         <View style={styles.card}>
+          {/* Email */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Adresse Email</Text>
+            <Text style={styles.label}>ADRESSE EMAIL</Text>
             <View style={styles.inputWrapper}>
               <TextInput 
-                placeholder="exemple@eventsnap.com"
-                placeholderTextColor="#A0A0A0"
-                style={styles.input}
+                placeholder="exemple@eventsnap.com" 
+                placeholderTextColor="#A0A0A0" 
+                style={styles.input} 
                 keyboardType="email-address"
                 autoCapitalize="none"
                 value={email}
@@ -76,13 +73,17 @@ export default function LoginScreen() {
             </View>
           </View>
 
+          {/* Password */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Mot de passe</Text>
+            <View style={styles.passwordLabelRow}>
+              <Text style={styles.label}>MOT DE PASSE</Text>
+              <Text style={styles.forgotPassword}>OUBLIÉ ?</Text>
+            </View>
             <View style={styles.inputWrapper}>
               <TextInput 
-                placeholder="••••••••"
-                placeholderTextColor="#A0A0A0"
-                style={styles.input}
+                placeholder="••••••••" 
+                placeholderTextColor="#A0A0A0" 
+                style={styles.input} 
                 secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={setPassword}
@@ -93,23 +94,34 @@ export default function LoginScreen() {
             </View>
           </View>
 
+          {/* Message d'erreur intégré au-dessus du bouton */}
+          {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
+
+          {/* Bouton Connexion */}
           <TouchableOpacity style={styles.primaryButton} onPress={handleSignIn} disabled={loading}>
-            {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>Se connecter</Text>}
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Se connecter</Text>
+            )}
           </TouchableOpacity>
         </View>
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Pas encore de compte ? <Text style={styles.footerLink} onPress={() => router.push('/register')}>S'inscrire</Text>
+            Pas encore de compte ?{' '}
+            <Text style={styles.footerLink} onPress={() => router.push('/register' as any)}>
+              S'inscrire
+            </Text>
           </Text>
         </View>
+
+        <Text style={styles.copyright}>© 2026 EVENTSNAP INTERACTIVE</Text>
       </SafeAreaView>
     </LinearGradient>
   );
 }
 
-
-// Conservation de vos styles d'origine
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
@@ -153,6 +165,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  errorText: { color: '#D9534F', fontSize: 13, textAlign: 'center', marginBottom: 15, fontWeight: '600' },
   footer: { marginTop: 30 },
   footerText: { fontSize: 14, color: '#555' },
   footerLink: { color: '#335C58', fontWeight: '700' },
