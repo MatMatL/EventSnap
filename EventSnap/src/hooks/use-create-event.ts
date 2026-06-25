@@ -105,7 +105,12 @@ export function useCreateEvent() {
       const userId = session.user.id;
       console.log('[useCreateEvent] userId =', userId);
 
-      const { data, error: insertError } = await supabase
+      // On sépare intentionnellement l'INSERT du SELECT.
+      // PostgREST v11 vérifie la politique SELECT sur le RETURNING clause :
+      // si l'INSERT + RETURNING sont fusionnés, la vérification SELECT peut se faire
+      // avant que le trigger handle_new_event ait ajouté le host dans members,
+      // déclenchant une fausse erreur RLS même si l'INSERT est valide.
+      const { error: insertError } = await supabase
         .from('events')
         .insert({
           name: form.name.trim(),
@@ -116,12 +121,9 @@ export function useCreateEvent() {
           event_date: form.eventDate.toISOString(),
           expires_at: expiresAt.toISOString(),
           host_id: userId,
-        })
-        .select('id')
-        .single();
+        });
 
       if (insertError) {
-        // Log complet pour faciliter le débogage
         console.error('[useCreateEvent] Erreur INSERT events :', {
           message: insertError.message,
           code: insertError.code,
@@ -132,8 +134,24 @@ export function useCreateEvent() {
         return null;
       }
 
+      // L'INSERT a réussi → le trigger a ajouté le host dans members.
+      // On peut maintenant SELECT l'événement créé (la politique SELECT est satisfaite).
+      const { data: created, error: selectError } = await supabase
+        .from('events')
+        .select('id')
+        .eq('host_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (selectError || !created) {
+        console.error('[useCreateEvent] Erreur SELECT après INSERT :', selectError?.message);
+        setError('Événement créé mais impossible de récupérer son ID.');
+        return null;
+      }
+
       setForm(DEFAULT_FORM);
-      return data.id as string;
+      return created.id as string;
     } catch (err) {
       console.error('[useCreateEvent] Exception inattendue :', err);
       setError('Une erreur inattendue est survenue.');
