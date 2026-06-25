@@ -91,11 +91,19 @@ export function useCreateEvent() {
 
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setError('Vous devez être connecté pour créer un événement.');
+      // getSession() charge la session depuis AsyncStorage et la met en mémoire.
+      // C'est la MÊME source que celle utilisée par PostgREST pour le header Authorization.
+      // Utiliser getUser() (appel réseau Auth) ne garantit pas que la session mémoire est chargée.
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !session) {
+        setError('Session expirée. Veuillez vous reconnecter.');
+        console.error('[useCreateEvent] Pas de session :', sessionError?.message);
         return null;
       }
+
+      const userId = session.user.id;
+      console.log('[useCreateEvent] userId =', userId);
 
       const { data, error: insertError } = await supabase
         .from('events')
@@ -107,19 +115,27 @@ export function useCreateEvent() {
           location_label: form.locationLabel.trim() || null,
           event_date: form.eventDate.toISOString(),
           expires_at: expiresAt.toISOString(),
-          host_id: user.id,
+          host_id: userId,
         })
         .select('id')
         .single();
 
       if (insertError) {
+        // Log complet pour faciliter le débogage
+        console.error('[useCreateEvent] Erreur INSERT events :', {
+          message: insertError.message,
+          code: insertError.code,
+          details: insertError.details,
+          hint: insertError.hint,
+        });
         setError(insertError.message);
         return null;
       }
 
       setForm(DEFAULT_FORM);
       return data.id as string;
-    } catch {
+    } catch (err) {
+      console.error('[useCreateEvent] Exception inattendue :', err);
       setError('Une erreur inattendue est survenue.');
       return null;
     } finally {
