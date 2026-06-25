@@ -16,7 +16,6 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCreateEvent, TTL_OPTIONS } from '../../hooks/use-create-event';
-import { supabase } from '../../lib/supabase';
 
 const COLORS = {
   cream: '#FFF8E7',
@@ -70,40 +69,6 @@ export default function CreateEventScreen() {
       setDateError(null);
       updateField('eventDate', parsed);
     }
-  }
-
-  async function handleDebugSession() {
-    const { data: { session }, error: sessErr } = await supabase.auth.getSession();
-    const { data: { user }, error: userErr } = await supabase.auth.getUser();
-
-    let profileInfo = 'non vérifié';
-    if (session?.user?.id) {
-      const { data: profile, error: profErr } = await supabase
-        .from('profiles')
-        .select('id, username, plan')
-        .eq('id', session.user.id)
-        .single();
-      profileInfo = profErr
-        ? `ERREUR: ${profErr.message}`
-        : profile
-        ? `✅ username=${profile.username} plan=${profile.plan}`
-        : '❌ profil introuvable';
-    }
-
-    Alert.alert(
-      '🔍 Debug Session',
-      [
-        `Session: ${session ? '✅ présente' : '❌ absente'}`,
-        `Session error: ${sessErr?.message ?? 'aucune'}`,
-        `User (getUser): ${user?.id ?? '❌ null'}`,
-        `User error: ${userErr?.message ?? 'aucune'}`,
-        `Session user.id: ${session?.user?.id ?? '❌ null'}`,
-        `Email: ${session?.user?.email ?? '—'}`,
-        `Token: ${session?.access_token ? '✅ présent' : '❌ manquant'}`,
-        `Profil DB: ${profileInfo}`,
-      ].join('\n'),
-      [{ text: 'OK' }]
-    );
   }
 
   async function handleSubmit() {
@@ -271,12 +236,6 @@ export default function CreateEventScreen() {
               </Text>
             </View>
           </View>
-
-          {/* ── DEBUG (à supprimer en prod) ── */}
-          <TouchableOpacity style={styles.debugButton} onPress={handleDebugSession}>
-            <Feather name="terminal" size={14} color="#888" />
-            <Text style={styles.debugButtonText}>Vérifier la session</Text>
-          </TouchableOpacity>
 
           {/* ── Bouton créer ── */}
           <TouchableOpacity
@@ -534,21 +493,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.muted,
     marginTop: -8,
-  },
-  debugButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 10,
-    backgroundColor: COLORS.inputBg,
-  },
-  debugButtonText: {
-    fontSize: 12,
-    color: '#888',
-    fontWeight: '500',
   },
 });
