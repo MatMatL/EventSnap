@@ -341,7 +341,7 @@ export default function EventsScreen() {
       const validMemberships = (membershipsRes.data ?? []).filter((m) => m.events);
 
       // Récupère les compteurs de membres pour chaque event
-      const eventIds = validMemberships.map((m) => (m.events as EventRow).id);
+      const eventIds = validMemberships.map((m) => (m.events as unknown as EventRow).id);
       let countMap: Record<string, number> = {};
 
       if (eventIds.length > 0) {
@@ -357,7 +357,7 @@ export default function EventsScreen() {
 
       const now = new Date();
       const withMeta: EventWithMeta[] = validMemberships.map((m) => {
-        const ev = m.events as EventRow;
+        const ev = m.events as unknown as EventRow;
         const expiresAt = new Date(ev.expires_at);
         const eventDate = new Date(ev.event_date);
         return {
