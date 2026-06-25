@@ -20,59 +20,34 @@ export default function RegisterScreen() {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
       return;
     }
-
+    if (password.length < 6) {
+      Alert.alert('Sécurité', 'Le mot de passe doit contenir au moins 6 caractères.');
+      return;
+    }
     if (password !== confirmPassword) {
       Alert.alert('Erreur', 'Les mots de passe ne correspondent pas.');
       return;
     }
 
-    // Validation du format du pseudo (3-30 caractères, lettres, chiffres, _)
-    const usernameRegex = /^[a-zA-Z0-9_]{3,30}$/;
-    if (!usernameRegex.test(username)) {
-      Alert.alert('Pseudo invalide', 'Le pseudo doit faire entre 3 et 30 caractères (lettres, chiffres et _ uniquement).');
-      return;
-    }
-
     setLoading(true);
 
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            username: username.trim(),
-          }
-        }
-      });
+    const { error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { data: { username: username.trim() } }
+    });
 
-      if (error) {
-        setLoading(false);
-        if (error.status === 429 || error.code === 'over_email_send_rate_limit') {
-          Alert.alert('Serveur saturé', 'Limite de mails atteinte. Désactivez bien "Confirm email" tout en bas de Supabase.');
-        } else {
-          Alert.alert('Erreur d\'inscription', error.message);
-        }
-        return;
+    setLoading(false);
+
+    if (error) {
+      let errorMessage = error.message;
+      if (error.message.includes('already registered')) {
+        errorMessage = "Cet e-mail est déjà utilisé.";
       }
-
-      setLoading(false);
-      
-      // Si "Confirm email" est bien désactivé en bas dans Supabase, data.session existera immédiatement
-      if (data?.session) {
-        Alert.alert('Compte créé !', 'Bienvenue sur EventSnap.', [
-          { text: 'Continuer', onPress: () => router.replace('/' as any) }
-        ]);
-      } else {
-        Alert.alert('Vérification requise', 'Un mail vous a été envoyé. Si vous êtes en local, désactivez "Confirm email" dans Supabase.', [
-          { text: 'OK', onPress: () => router.replace('/login' as any) }
-        ]);
-      }
-
-    } catch (err) {
-      setLoading(false);
-      console.error("💥 Crash handleSignUp :", err);
-      Alert.alert('Erreur', 'Une erreur inattendue est survenue.');
+      Alert.alert('Erreur d\'inscription', errorMessage);
+    } else {
+      Alert.alert('Succès', 'Compte créé ! Veuillez vous connecter.');
+      router.replace('/login');
     }
   }
 

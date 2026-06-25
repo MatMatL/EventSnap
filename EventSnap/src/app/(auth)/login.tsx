@@ -15,16 +15,37 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
 
   async function handleSignIn() {
-    if (!email || !password) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs.');
+    // 1. Validation locale simple avant l'appel API
+    if (!email.trim() || !password) {
+      Alert.alert('Champs requis', 'Veuillez remplir votre e-mail et votre mot de passe.');
       return;
     }
+
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    
+    // 2. Tentative de connexion
+    const { error } = await supabase.auth.signInWithPassword({ 
+      email: email.trim(), 
+      password 
+    });
+
+    setLoading(false);
+
     if (error) {
-      Alert.alert('Erreur de connexion', error.message);
-      setLoading(false);
+      // 3. Gestion des erreurs spécifiques de Supabase
+      let errorMessage = "Une erreur est survenue lors de la connexion.";
+      
+      if (error.message.includes('Invalid login credentials')) {
+        errorMessage = "E-mail ou mot de passe incorrect.";
+      } else if (error.message.includes('Email not confirmed')) {
+        errorMessage = "Veuillez confirmer votre adresse e-mail avant de vous connecter.";
+      } else {
+        errorMessage = error.message; // Affiche le message brut si spécifique
+      }
+      
+      Alert.alert('Erreur de connexion', errorMessage);
     } else {
+      // Succès
       router.replace('/(tabs)');
     }
   }
@@ -32,17 +53,14 @@ export default function LoginScreen() {
   return (
     <LinearGradient colors={['#E3EAE5', '#F5F3EB']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        
         <View style={styles.header}>
           <View style={styles.cameraIconWrapper}>
             <Feather name="camera" size={24} color="#335C58" />
           </View>
           <Text style={styles.logo}>EventSnap</Text>
-          <Text style={styles.subtitle}>ORGANISER. CAPTURER. REVIVRE.</Text>
         </View>
 
         <View style={styles.card}>
-          {/* Email */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Adresse Email</Text>
             <View style={styles.inputWrapper}>
@@ -55,18 +73,11 @@ export default function LoginScreen() {
                 value={email}
                 onChangeText={setEmail}
               />
-              <Feather name="at-sign" size={18} color="#A0A0A0" />
             </View>
           </View>
 
-          {/* Mot de passe */}
           <View style={styles.inputGroup}>
-            <View style={styles.passwordLabelRow}>
-              <Text style={styles.label}>Mot de passe</Text>
-              <TouchableOpacity>
-                <Text style={styles.forgotPassword}>Oublié ?</Text>
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.label}>Mot de passe</Text>
             <View style={styles.inputWrapper}>
               <TextInput 
                 placeholder="••••••••"
@@ -82,33 +93,21 @@ export default function LoginScreen() {
             </View>
           </View>
 
-          {/* Bouton de Connexion */}
           <TouchableOpacity style={styles.primaryButton} onPress={handleSignIn} disabled={loading}>
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <>
-                <Text style={styles.primaryButtonText}>Se connecter</Text>
-                <Feather name="arrow-right" size={20} color="#FFFFFF" style={{ marginLeft: 8 }} />
-              </>
-            )}
+            {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>Se connecter</Text>}
           </TouchableOpacity>
         </View>
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Pas encore de compte ?{' '}
-            <Text style={styles.footerLink} onPress={() => router.push('/(auth)/register')}>
-              S'inscrire
-            </Text>
+            Pas encore de compte ? <Text style={styles.footerLink} onPress={() => router.push('/register')}>S'inscrire</Text>
           </Text>
         </View>
-        
-        <Text style={styles.copyright}>© 2026 EventSnap. Capturez l'instant.</Text>
       </SafeAreaView>
     </LinearGradient>
   );
 }
+
 
 // Conservation de vos styles d'origine
 const styles = StyleSheet.create({
