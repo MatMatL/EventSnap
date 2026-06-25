@@ -27,6 +27,7 @@
       "expo-router",
       [
         "expo-location",
+        
         {
           "locationAlwaysAndWhenInUsePermission": "EventSnap utilise votre position pour localiser vos événements.",
           "locationWhenInUsePermission": "EventSnap utilise votre position pour localiser vos événements."
@@ -40,6 +41,12 @@
             "image": "./assets/images/splash-icon.png",
             "imageWidth": 76
           }
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Autorisez l'accès caméra pour scanner les QR codes d'événements."
         }
       ]
     ],

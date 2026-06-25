@@ -14,6 +14,7 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import QRScannerModal from '../../components/QRScannerModal';
 
 const COLORS = {
   cream: '#FFF8E7',
@@ -291,6 +292,7 @@ function EmptyState({ filter }: { filter: FilterTab }) {
 
 export default function EventsScreen() {
   const router = useRouter();
+  const [showScanModal, setShowScanModal] = useState(false);
   const [filter, setFilter] = useState<FilterTab>('current');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -476,6 +478,12 @@ export default function EventsScreen() {
       {/* ── Header ── */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Événements</Text>
+        <TouchableOpacity 
+          style={styles.scanButton} 
+          onPress={() => setShowScanModal(true)}
+        >
+          <Feather name="camera" size={18} color={COLORS.white} />
+        </TouchableOpacity>
       </View>
 
       {/* ── Filter chips ── */}
@@ -538,6 +546,15 @@ export default function EventsScreen() {
           )}
         />
       )}
+      <QRScannerModal
+        visible={showScanModal}
+        onClose={() => setShowScanModal(false)}
+        onJoined={(eventId) => {
+          setShowScanModal(false);
+          loadData(); // recharge la liste pour inclure le nouvel event
+          router.push(`/event/${eventId}` as any);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -553,10 +570,13 @@ const styles = StyleSheet.create({
   retryBtnText: { color: COLORS.white, fontWeight: '700' },
 
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  paddingHorizontal: 20,
+  paddingTop: 12,
+  paddingBottom: 8,
+},
   headerTitle: {
     fontSize: 28,
     fontWeight: '800',
@@ -786,4 +806,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   emptyCtaText: { color: COLORS.white, fontWeight: '700', fontSize: 14 },
+  scanButton: {
+  backgroundColor: COLORS.teal,
+  width: 38,
+  height: 38,
+  borderRadius: 12,
+  justifyContent: 'center',
+  alignItems: 'center',
+},
 });

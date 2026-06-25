@@ -8,8 +8,6 @@ export default function RootLayout() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    // 1. Charger la session depuis AsyncStorage AVANT tout rendu de route.
-    //    Sans ça, les premières requêtes Supabase partent sans JWT (rôle anon).
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         router.replace('/(tabs)');
@@ -19,7 +17,6 @@ export default function RootLayout() {
       setReady(true);
     });
 
-    // 2. Écouter les changements d'état ultérieurs (déconnexion, refresh token…)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'INITIAL_SESSION') return; // déjà géré au-dessus
       if (session) {
