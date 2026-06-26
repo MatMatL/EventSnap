@@ -10,7 +10,9 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "EventSnap utilise votre position pour afficher les sorties à proximité sur la carte."
+        "NSLocationWhenInUseUsageDescription": "EventSnap utilise votre position pour afficher les sorties à proximité sur la carte.",
+        "NSPhotoLibraryUsageDescription": "EventSnap a besoin d'accéder à votre galerie pour sauvegarder les photos des événements.",
+        "NSPhotoLibraryAddUsageDescription": "EventSnap sauvegarde les photos des événements dans votre galerie."
       }
     },
     "android": {
@@ -22,7 +24,10 @@
       },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -53,6 +58,20 @@
         "expo-camera",
         {
           "cameraPermission": "Autorisez l'accès caméra pour scanner les QR codes d'événements."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "EventSnap sauvegarde les photos des événements dans votre galerie.",
+          "savePhotosPermission": "EventSnap a besoin d'accéder à votre galerie pour sauvegarder les photos.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "EventSnap accède à vos photos pour les partager dans les événements."
         }
       ]
     ],
