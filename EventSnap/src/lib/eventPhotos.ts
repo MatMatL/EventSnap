@@ -1,6 +1,6 @@
 import { Alert, Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import * as MediaLibrary from 'expo-media-library';
+import * as MediaLibrary from 'expo-media-library/legacy';
 import { supabase } from './supabase';
 import type { EventPhoto } from '@/types/photo';
 
