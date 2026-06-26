@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,9 @@ import {
   Image,
   Alert,
   TextInput,
+  Modal,
+  FlatList,
+  Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -18,9 +21,16 @@ import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as MediaLibrary from 'expo-media-library';
 import { decode } from 'base64-arraybuffer';
-import QRCode from 'react-native-qrcode-svg';
 import QRScannerModal from '../../components/QRScannerModal';
+
+let QRCode: any = null;
+if (Platform.OS !== 'web') {
+  QRCode = require('react-native-qrcode-svg').default;
+}
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const COLORS = {
   bgLight: '#E3EAE5',
@@ -141,6 +151,12 @@ export default function EventDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
+  // --- ÉTATS POUR LA GALERIE, LA SÉLECTION ET LE TÉLÉCHARGEMENT ---
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
+  const [viewerPhotoIndex, setViewerPhotoIndex] = useState<number | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+
   const loadEventData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -178,7 +194,6 @@ export default function EventDetailScreen() {
                 .from('event-photos')
                 .createSignedUrl(p.storage_path, 3600);
 
-              // Charge les réactions pour cette photo
               const { data: reactionsData } = await supabase
                 .from('reactions')
                 .select('emoji')
@@ -264,7 +279,6 @@ export default function EventDetailScreen() {
 
   async function sendEventInvitation(friend: FriendProfile) {
     if (!id || !currentUserId || !event) return;
-
     setInvitingFriendId(friend.id);
 
     try {
@@ -300,7 +314,6 @@ export default function EventDetailScreen() {
 
   function handleInviteFriend(friend: FriendProfile) {
     if (!event) return;
-
     Alert.alert(
       'Inviter un ami',
       `Envoyer une invitation à @${friend.username} pour rejoindre « ${event.name} » ?`,
@@ -355,8 +368,6 @@ export default function EventDetailScreen() {
 
     try {
       const ext = (uri.substring(uri.lastIndexOf('.') + 1) || 'jpeg').toLowerCase();
-
-      // Structure attendue par la policy storage : {event_id}/{user_id}/{filename}
       const fileName = `${id}/${currentUserId}/${Date.now()}.${ext}`;
 
       const base64 = await FileSystem.readAsStringAsync(uri, {
@@ -403,51 +414,95 @@ export default function EventDetailScreen() {
     }
   }
 
-  // Ajoute cette fonction après handlePhotoLongPress
+  // --- GESTION DES TÉLÉCHARGEMENTS ET DE LA SÉLECTION ---
 
-async function handlePhotoLongPress(photoId: string) {
-  if (!currentUserId) return;
+  const toggleSelection = (photoId: string) => {
+    setSelectedPhotoIds((prev) => 
+      prev.includes(photoId) ? prev.filter(id => id !== photoId) : [...prev, photoId]
+    );
+  };
 
-  try {
-    // Vérifie si l'utilisateur a déjà réagi à cette photo
-    const { data: existingReaction } = await supabase
-      .from('reactions')
-      .select('emoji')
-      .eq('photo_id', photoId)
-      .eq('user_id', currentUserId)
-      .maybeSingle();
-
-    if (existingReaction) {
-      // L'utilisateur a déjà réagi
-      Alert.alert(
-        'Réaction existante',
-        `Tu as déjà réagi avec ${existingReaction.emoji}. Veux-tu la changer ?`,
-        [
-          { text: 'Non', style: 'cancel' },
-          {
-            text: 'Oui, changer',
-            onPress: () => showReactionOptions(photoId, true),
-          },
-        ]
-      );
+  const selectAllPhotos = () => {
+    if (selectedPhotoIds.length === photos.length) {
+      setSelectedPhotoIds([]); // Deselect all
     } else {
-      // L'utilisateur n'a pas encore réagi
-      showReactionOptions(photoId, false);
+      setSelectedPhotoIds(photos.map(p => p.id)); // Select all
     }
-  } catch (error: any) {
-    Alert.alert('Erreur', error.message);
-  }
-}
+  };
 
-function showReactionOptions(photoId: string, isReplacing: boolean) {
+  const handleDownloadPhotos = async (photoUrls: string[]) => {
+    if (photoUrls.length === 0) return;
+    
+    if (Platform.OS === 'web') {
+      Alert.alert('Non supporté', 'Le téléchargement de photos est disponible uniquement sur iOS et Android.');
+      setIsSelectionMode(false);
+      setSelectedPhotoIds([]);
+      return;
+    }
+
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission requise', "Nous avons besoin d'accès à la galerie pour sauvegarder les photos.");
+      return;
+    }
+
+    setIsDownloading(true);
+    try {
+      let downloadedCount = 0;
+      for (const url of photoUrls) {
+        const fileUri = `${FileSystem.documentDirectory}eventsnap_${Date.now()}_${downloadedCount}.jpg`;
+        const { uri } = await FileSystem.downloadAsync(url, fileUri);
+        await MediaLibrary.saveToLibraryAsync(uri);
+        downloadedCount++;
+      }
+      Alert.alert('Succès', `${downloadedCount} photo(s) sauvegardée(s) dans la galerie !`);
+      
+      setIsSelectionMode(false);
+      setSelectedPhotoIds([]);
+    } catch (error: any) {
+      Alert.alert('Erreur', 'Erreur lors du téléchargement : ' + error.message);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  async function handlePhotoLongPress(photoId: string) {
+    if (!currentUserId || isSelectionMode) return;
+
+    try {
+      const { data: existingReaction } = await supabase
+        .from('reactions')
+        .select('emoji')
+        .eq('photo_id', photoId)
+        .eq('user_id', currentUserId)
+        .maybeSingle();
+
+      if (existingReaction) {
+        Alert.alert(
+          'Réaction existante',
+          `Tu as déjà réagi avec ${existingReaction.emoji}. Veux-tu la changer ?`,
+          [
+            { text: 'Non', style: 'cancel' },
+            { text: 'Oui, changer', onPress: () => showReactionOptions(photoId, true) },
+          ]
+        );
+      } else {
+        showReactionOptions(photoId, false);
+      }
+    } catch (error: any) {
+      Alert.alert('Erreur', error.message);
+    }
+  }
+
+  function showReactionOptions(photoId: string, isReplacing: boolean) {
     Alert.alert(
       'Ajouter une réaction',
       isReplacing ? 'Choisissez un nouvel emoji' : 'Choisissez un emoji pour réagir en direct',
       [
-        { text: '❤️', onPress: () => addReactionToDatabase(photoId, '❤️', isReplacing) },
-        { text: '🔥', onPress: () => addReactionToDatabase(photoId, '🔥', isReplacing) },
-        { text: '😂', onPress: () => addReactionToDatabase(photoId, '😂', isReplacing) },
-        { text: '🙌', onPress: () => addReactionToDatabase(photoId, '🙌', isReplacing) },
+        { text: '❤️ Love', onPress: () => addReactionToDatabase(photoId, '❤️', isReplacing) },
+        { text: '🔥 Fire', onPress: () => addReactionToDatabase(photoId, '🔥', isReplacing) },
+        { text: '😂 Haha', onPress: () => addReactionToDatabase(photoId, '😂', isReplacing) },
+        { text: '🙌 Bravo', onPress: () => addReactionToDatabase(photoId, '🙌', isReplacing) },
         { text: 'Annuler', style: 'cancel' },
       ]
     );
@@ -455,13 +510,10 @@ function showReactionOptions(photoId: string, isReplacing: boolean) {
 
   async function addReactionToDatabase(photoId: string, emoji: string, isReplacing: boolean) {
     if (!currentUserId) return;
-
     try {
       if (isReplacing) {
         await supabase.from('reactions').delete().eq('photo_id', photoId).eq('user_id', currentUserId);
       }
-
-      // Insère la nouvelle réaction
       const { error } = await supabase.from('reactions').insert({
         photo_id: photoId,
         user_id: currentUserId,
@@ -469,7 +521,6 @@ function showReactionOptions(photoId: string, isReplacing: boolean) {
       });
 
       if (error) throw error;
-
       await loadEventData();
     } catch (error: any) {
       Alert.alert('Erreur', error.message);
@@ -489,7 +540,7 @@ function showReactionOptions(photoId: string, isReplacing: boolean) {
 
   return (
     <LinearGradient colors={[COLORS.bgLight, COLORS.bgCream]} style={styles.container}>
-      {/* Header — padding top renforcé pour ne jamais être coupé par la status bar */}
+      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
           <Feather name="arrow-left" size={18} color={COLORS.teal} />
@@ -525,6 +576,7 @@ function showReactionOptions(photoId: string, isReplacing: boolean) {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        
         {/* Modal QR Code intégré */}
         {showQRModal && (
           <View style={styles.qrCard}>
@@ -537,12 +589,18 @@ function showReactionOptions(photoId: string, isReplacing: boolean) {
             <Text style={styles.qrSubtitle}>Scannez ce code pour rejoindre instantanément et uploader vos photos.</Text>
 
             <View style={styles.qrCodeWrapper}>
-              <QRCode
-                value={`myapp://event/join?id=${event?.id}`}
-                size={140}
-                color={COLORS.teal}
-                backgroundColor={COLORS.white}
-              />
+              {Platform.OS === 'web' ? (
+                <Text style={{ textAlign: 'center', fontSize: 12, color: COLORS.muted }}>
+                  QR Code indisponible sur la version Web.
+                </Text>
+              ) : QRCode ? (
+                <QRCode
+                  value={`myapp://event/join?id=${event?.id}`}
+                  size={140}
+                  color={COLORS.teal}
+                  backgroundColor={COLORS.white}
+                />
+              ) : null}
             </View>
             <Text style={styles.qrCodeId}>
               ID: {event ? event.id.substring(0, 8).toUpperCase() : '------'}
@@ -676,7 +734,32 @@ function showReactionOptions(photoId: string, isReplacing: boolean) {
                 <Text style={styles.countBadgeText}>{photos.length}</Text>
               </View>
             </View>
+
+            {/* Bouton pour activer/désactiver le Mode Sélection */}
+            {photos.length > 0 && (
+              <TouchableOpacity 
+                style={styles.selectModeBtn} 
+                onPress={() => {
+                  setIsSelectionMode(!isSelectionMode);
+                  setSelectedPhotoIds([]);
+                }}
+              >
+                <Text style={styles.selectModeBtnText}>
+                  {isSelectionMode ? 'Annuler' : 'Sélectionner'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
+
+          {/* Option Tout Sélectionner */}
+          {isSelectionMode && photos.length > 0 && (
+            <TouchableOpacity style={styles.selectAllBtn} onPress={selectAllPhotos}>
+              <Feather name={selectedPhotoIds.length === photos.length ? "check-square" : "square"} size={14} color={COLORS.teal} />
+              <Text style={styles.selectAllBtnText}>
+                {selectedPhotoIds.length === photos.length ? "Tout désélectionner" : "Tout sélectionner"}
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {photos.length === 0 ? (
             <View style={styles.galleryEmpty}>
@@ -685,8 +768,8 @@ function showReactionOptions(photoId: string, isReplacing: boolean) {
             </View>
           ) : (
             <View style={styles.photoGrid}>
-              {photos.map((p) => {
-                // Compte les réactions pour cette photo
+              {photos.map((p, index) => {
+                const isSelected = selectedPhotoIds.includes(p.id);
                 const reactionCounts = (p.reactions || []).reduce((acc: Record<string, number>, emoji: string) => {
                   acc[emoji] = (acc[emoji] || 0) + 1;
                   return acc;
@@ -697,12 +780,31 @@ function showReactionOptions(photoId: string, isReplacing: boolean) {
                   <TouchableOpacity
                     key={p.id}
                     activeOpacity={0.8}
+                    onPress={() => {
+                      if (isSelectionMode) {
+                        toggleSelection(p.id);
+                      } else {
+                        // Ouvre la photo en plein écran
+                        setViewerPhotoIndex(index);
+                      }
+                    }}
                     onLongPress={() => handlePhotoLongPress(p.id)}
-                    style={styles.photoContainer}
+                    style={[styles.photoContainer, isSelected && styles.photoContainerSelected]}
                   >
                     <Image source={{ uri: p.photo_url }} style={styles.photoItemCompact} />
 
-                    {reactionEmojis && (
+                    {/* Overlay de sélection */}
+                    {isSelectionMode && (
+                      <View style={styles.selectionOverlay}>
+                        <Feather 
+                          name={isSelected ? "check-circle" : "circle"} 
+                          size={20} 
+                          color={isSelected ? COLORS.teal : "rgba(255,255,255,0.7)"} 
+                        />
+                      </View>
+                    )}
+
+                    {reactionEmojis && !isSelectionMode && (
                       <View style={styles.reactionBadgeRow}>
                         <Text style={styles.reactionBadgeText}>{reactionEmojis}</Text>
                       </View>
@@ -713,26 +815,102 @@ function showReactionOptions(photoId: string, isReplacing: boolean) {
             </View>
           )}
 
-          <View style={styles.actionRow}>
-            <TouchableOpacity style={[styles.actionBtn, styles.actionBtnOutline]} onPress={handlePickImage} disabled={uploading}>
-              <Feather name="image" size={16} color={COLORS.teal} />
-              <Text style={[styles.actionBtnText, { color: COLORS.teal }]}>Album</Text>
-            </TouchableOpacity>
+          {!isSelectionMode && (
+            <View style={styles.actionRow}>
+              <TouchableOpacity style={[styles.actionBtn, styles.actionBtnOutline]} onPress={handlePickImage} disabled={uploading}>
+                <Feather name="image" size={16} color={COLORS.teal} />
+                <Text style={[styles.actionBtnText, { color: COLORS.teal }]}>Album</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={handleTakePhoto} disabled={uploading}>
-              {uploading ? (
-                <ActivityIndicator color={COLORS.white} size="small" />
-              ) : (
-                <>
-                  <Feather name="aperture" size={16} color={COLORS.white} />
-                  <Text style={styles.actionBtnText}>Capturer</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.hintText}>💡 Reste appuyé longuement sur une photo pour y ajouter une réaction emoji.</Text>
+              <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={handleTakePhoto} disabled={uploading}>
+                {uploading ? (
+                  <ActivityIndicator color={COLORS.white} size="small" />
+                ) : (
+                  <>
+                    <Feather name="aperture" size={16} color={COLORS.white} />
+                    <Text style={styles.actionBtnText}>Capturer</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {!isSelectionMode && (
+            <Text style={styles.hintText}>💡 Reste appuyé longuement sur une photo pour y ajouter une réaction.</Text>
+          )}
         </View>
       </ScrollView>
+
+      {/* --- BARRE FLOTTANTE DE TÉLÉCHARGEMENT --- */}
+      {isSelectionMode && selectedPhotoIds.length > 0 && (
+        <View style={[styles.floatingDownloadBar, { paddingBottom: insets.bottom + 10 }]}>
+          <Text style={styles.floatingDownloadText}>{selectedPhotoIds.length} sélectionnée(s)</Text>
+          <TouchableOpacity 
+            style={styles.floatingDownloadBtn}
+            onPress={() => {
+              const urlsToDownload = photos
+                .filter(p => selectedPhotoIds.includes(p.id))
+                .map(p => p.photo_url);
+              handleDownloadPhotos(urlsToDownload);
+            }}
+            disabled={isDownloading}
+          >
+            {isDownloading ? (
+              <ActivityIndicator size="small" color={COLORS.white} />
+            ) : (
+              <Feather name="download" size={18} color={COLORS.white} />
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* --- MODALE DE VISIONNEUSE PLEIN ÉCRAN --- */}
+      <Modal
+        visible={viewerPhotoIndex !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setViewerPhotoIndex(null)}
+      >
+        <View style={styles.viewerContainer}>
+          <TouchableOpacity style={[styles.viewerCloseBtn, { top: insets.top + 20 }]} onPress={() => setViewerPhotoIndex(null)}>
+            <Feather name="x" size={28} color="#FFF" />
+          </TouchableOpacity>
+          
+          {viewerPhotoIndex !== null && (
+            <TouchableOpacity 
+              style={[styles.viewerDownloadBtn, { top: insets.top + 20 }]} 
+              onPress={() => handleDownloadPhotos([photos[viewerPhotoIndex].photo_url])}
+            >
+              <Feather name="download" size={24} color="#FFF" />
+            </TouchableOpacity>
+          )}
+
+          <FlatList
+            data={photos}
+            keyExtractor={item => item.id}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            initialScrollIndex={viewerPhotoIndex ?? 0}
+            getItemLayout={(data, index) => (
+              { length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index }
+            )}
+            onMomentumScrollEnd={(event) => {
+              const index = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+              setViewerPhotoIndex(index);
+            }}
+            renderItem={({ item }) => (
+              <View style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT, justifyContent: 'center', alignItems: 'center' }}>
+                <Image 
+                  source={{ uri: item.photo_url }} 
+                  style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT * 0.7 }} 
+                  resizeMode="contain" 
+                />
+              </View>
+            )}
+          />
+        </View>
+      </Modal>
 
       <QRScannerModal
         visible={showScanModal}
@@ -754,7 +932,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingBottom: 32, gap: 14 },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 100, gap: 14 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -861,8 +1039,15 @@ const styles = StyleSheet.create({
   avatarLetter: { fontSize: 14, fontWeight: '800', color: COLORS.teal },
   memberMiniName: { fontSize: 10, fontWeight: '600', color: COLORS.dark, textAlign: 'center' },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingVertical: 4 },
-  photoContainer: { position: 'relative' },
-  photoItemCompact: { width: 90, height: 90, borderRadius: 14, backgroundColor: COLORS.inputBg },
+  photoContainer: { position: 'relative', borderRadius: 14, overflow: 'hidden' },
+  photoContainerSelected: { borderWidth: 3, borderColor: COLORS.teal },
+  photoItemCompact: { width: 90, height: 90, backgroundColor: COLORS.inputBg },
+  selectionOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   reactionBadgeRow: { position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(255,255,255,0.9)', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 8 },
   reactionBadgeText: { fontSize: 10 },
   galleryEmpty: { alignItems: 'center', paddingVertical: 20, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 14 },
@@ -873,4 +1058,30 @@ const styles = StyleSheet.create({
   actionBtnOutline: { backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.teal },
   actionBtnText: { color: COLORS.white, fontWeight: '700', fontSize: 13 },
   hintText: { fontSize: 10, color: COLORS.muted, textAlign: 'center', fontStyle: 'italic', marginTop: 2 },
+  
+  // Nouveaux Styles (Sélection et Viewer)
+  selectModeBtn: { backgroundColor: 'rgba(51, 92, 88, 0.1)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  selectModeBtnText: { fontSize: 11, fontWeight: '700', color: COLORS.teal },
+  selectAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, paddingHorizontal: 4 },
+  selectAllBtnText: { fontSize: 13, color: COLORS.teal, fontWeight: '600' },
+  floatingDownloadBar: {
+    position: 'absolute',
+    bottom: 0, left: 0, right: 0,
+    backgroundColor: COLORS.teal,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 10,
+  },
+  floatingDownloadText: { color: COLORS.white, fontSize: 15, fontWeight: '700' },
+  floatingDownloadBtn: { backgroundColor: COLORS.coral, padding: 12, borderRadius: 12 },
+  
+  // Viewer
+  viewerContainer: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' },
+  viewerCloseBtn: { position: 'absolute', right: 20, zIndex: 10, padding: 8 },
+  viewerDownloadBtn: { position: 'absolute', left: 20, zIndex: 10, padding: 8 },
 });
