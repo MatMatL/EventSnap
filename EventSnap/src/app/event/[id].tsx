@@ -66,6 +66,12 @@ type Photo = {
   reactions?: string[];
 };
 
+type FriendProfile = {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+};
+
 function formatDate(iso?: string) {
   if (!iso) return '';
   return new Date(iso).toLocaleDateString('fr-FR', {
@@ -126,6 +132,9 @@ export default function EventDetailScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showQRModal, setShowQRModal] = useState(false);
+  const [invitableFriends, setInvitableFriends] = useState<FriendProfile[]>([]);
+  const [loadingFriends, setLoadingFriends] = useState(false);
+  const [invitingFriendId, setInvitingFriendId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -194,6 +203,113 @@ export default function EventDetailScreen() {
   useEffect(() => {
     loadEventData();
   }, [loadEventData]);
+
+  const loadInvitableFriends = useCallback(async () => {
+    if (!id || !currentUserId) return;
+    setLoadingFriends(true);
+
+    try {
+      const [friendshipsRes, invitationsRes] = await Promise.all([
+        supabase
+          .from('friendships')
+          .select(`
+            user:profiles!friendships_user_id_fkey(id, username, avatar_url),
+            friend:profiles!friendships_friend_id_fkey(id, username, avatar_url)
+          `)
+          .eq('status', 'accepted')
+          .or(`user_id.eq.${currentUserId},friend_id.eq.${currentUserId}`),
+        supabase
+          .from('event_invitations')
+          .select('invitee_id')
+          .eq('event_id', id)
+          .eq('status', 'pending'),
+      ]);
+
+      if (friendshipsRes.error) throw friendshipsRes.error;
+
+      const memberIds = new Set(members.map((m) => m.user_id));
+      const pendingInviteeIds = new Set(
+        (invitationsRes.data ?? []).map((i) => i.invitee_id)
+      );
+
+      const friends: FriendProfile[] = (friendshipsRes.data ?? [])
+        .map((f: any) => (f.user.id === currentUserId ? f.friend : f.user))
+        .filter(
+          (friend: FriendProfile) =>
+            friend.id !== currentUserId &&
+            !memberIds.has(friend.id) &&
+            !pendingInviteeIds.has(friend.id)
+        );
+
+      setInvitableFriends(friends);
+    } catch (err: any) {
+      Alert.alert('Erreur', err.message ?? 'Impossible de charger tes amis.');
+    } finally {
+      setLoadingFriends(false);
+    }
+  }, [id, currentUserId, members]);
+
+  useEffect(() => {
+    if (showSearch) {
+      loadInvitableFriends();
+    } else {
+      setSearchQuery('');
+      setInvitableFriends([]);
+    }
+  }, [showSearch, loadInvitableFriends]);
+
+  const filteredInvitableFriends = invitableFriends.filter((friend) =>
+    friend.username.toLowerCase().includes(searchQuery.trim().toLowerCase())
+  );
+
+  async function sendEventInvitation(friend: FriendProfile) {
+    if (!id || !currentUserId || !event) return;
+
+    setInvitingFriendId(friend.id);
+
+    try {
+      const inviterUsername =
+        members.find((m) => m.user_id === currentUserId)?.profiles?.username ?? 'Quelqu\'un';
+
+      const { error: inviteError } = await supabase.from('event_invitations').insert({
+        event_id: id,
+        inviter_id: currentUserId,
+        invitee_id: friend.id,
+        status: 'pending',
+      });
+
+      if (inviteError) throw inviteError;
+
+      const { error: notifError } = await supabase.from('notifications').insert({
+        user_id: friend.id,
+        event_id: id,
+        message: `@${inviterUsername} t'invite à rejoindre « ${event.name} »`,
+        type: 'event_invitation',
+      });
+
+      if (notifError) throw notifError;
+
+      setInvitableFriends((prev) => prev.filter((f) => f.id !== friend.id));
+      Alert.alert('Invitation envoyée', `${friend.username} recevra une notification.`);
+    } catch (err: any) {
+      Alert.alert('Erreur', err.message ?? 'Impossible d\'envoyer l\'invitation.');
+    } finally {
+      setInvitingFriendId(null);
+    }
+  }
+
+  function handleInviteFriend(friend: FriendProfile) {
+    if (!event) return;
+
+    Alert.alert(
+      'Inviter un ami',
+      `Envoyer une invitation à @${friend.username} pour rejoindre « ${event.name} » ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Inviter', onPress: () => sendEventInvitation(friend) },
+      ]
+    );
+  }
 
   async function handleTakePhoto() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -360,14 +476,8 @@ function showReactionOptions(photoId: string, isReplacing: boolean) {
     }
   }
 
-  function handleAddFriend() {
-    if (!searchQuery.trim()) return;
-    Alert.alert('Invitation', `Une demande d'accès a été envoyée à "${searchQuery}".`);
-    setSearchQuery('');
-    setShowSearch(false);
-  }
-
   const isHost = event?.host_id === currentUserId;
+  const isMember = members.some((m) => m.user_id === currentUserId);
 
   if (loading) {
     return (
@@ -476,25 +586,69 @@ function showReactionOptions(photoId: string, isReplacing: boolean) {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.addFriendBtn} onPress={() => setShowSearch(!showSearch)}>
-              <Feather name={showSearch ? 'minus' : 'plus'} size={16} color={COLORS.white} />
-              <Text style={styles.addFriendBtnText}>Ajouter</Text>
-            </TouchableOpacity>
+            {isMember && (
+              <TouchableOpacity style={styles.addFriendBtn} onPress={() => setShowSearch(!showSearch)}>
+                <Feather name={showSearch ? 'minus' : 'plus'} size={16} color={COLORS.white} />
+                <Text style={styles.addFriendBtnText}>Ajouter</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {showSearch && (
-            <View style={styles.searchWrapper}>
-              <TextInput
-                placeholder="Rechercher un pseudo ou ami..."
-                placeholderTextColor={COLORS.muted}
-                style={styles.searchInput}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                onSubmitEditing={handleAddFriend}
-              />
-              <TouchableOpacity style={styles.searchSubmitBtn} onPress={handleAddFriend}>
-                <Feather name="search" size={14} color={COLORS.teal} />
-              </TouchableOpacity>
+            <View style={styles.invitePanel}>
+              <View style={styles.searchWrapper}>
+                <Feather name="search" size={14} color={COLORS.muted} style={styles.searchIcon} />
+                <TextInput
+                  placeholder="Filtrer tes amis..."
+                  placeholderTextColor={COLORS.muted}
+                  style={styles.searchInput}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                />
+              </View>
+
+              {loadingFriends ? (
+                <ActivityIndicator color={COLORS.teal} style={styles.friendsLoader} />
+              ) : invitableFriends.length === 0 ? (
+                <Text style={styles.inviteEmptyText}>
+                  Aucun ami disponible à inviter pour cet événement.
+                </Text>
+              ) : filteredInvitableFriends.length === 0 ? (
+                <Text style={styles.inviteEmptyText}>Aucun ami ne correspond à ta recherche.</Text>
+              ) : (
+                <View style={styles.friendList}>
+                  {filteredInvitableFriends.map((friend) => (
+                    <TouchableOpacity
+                      key={friend.id}
+                      style={styles.friendRow}
+                      onPress={() => handleInviteFriend(friend)}
+                      disabled={invitingFriendId === friend.id}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.avatarCircle}>
+                        {friend.avatar_url ? (
+                          <Image source={{ uri: friend.avatar_url }} style={styles.friendAvatarImage} />
+                        ) : (
+                          <Text style={styles.avatarLetter}>{friend.username[0].toUpperCase()}</Text>
+                        )}
+                      </View>
+                      <Text style={styles.friendUsername} numberOfLines={1}>
+                        @{friend.username}
+                      </Text>
+                      {invitingFriendId === friend.id ? (
+                        <ActivityIndicator color={COLORS.teal} size="small" />
+                      ) : (
+                        <View style={styles.inviteChip}>
+                          <Feather name="user-plus" size={12} color={COLORS.teal} />
+                          <Text style={styles.inviteChipText}>Inviter</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
           )}
 
@@ -651,9 +805,45 @@ const styles = StyleSheet.create({
   countBadgeText: { fontSize: 11, fontWeight: '700', color: COLORS.teal },
   addFriendBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.teal, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, gap: 4 },
   addFriendBtnText: { color: COLORS.white, fontSize: 11, fontWeight: '700' },
-  searchWrapper: { flexDirection: 'row', backgroundColor: COLORS.white, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden' },
-  searchInput: { flex: 1, height: 38, paddingHorizontal: 12, fontSize: 13, color: COLORS.dark },
-  searchSubmitBtn: { width: 40, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.inputBg },
+  invitePanel: { gap: 10 },
+  searchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 10,
+    gap: 8,
+  },
+  searchIcon: { marginLeft: 2 },
+  searchInput: { flex: 1, height: 38, fontSize: 13, color: COLORS.dark },
+  friendsLoader: { paddingVertical: 12 },
+  inviteEmptyText: { fontSize: 12, color: COLORS.muted, fontStyle: 'italic', textAlign: 'center', paddingVertical: 8 },
+  friendList: { gap: 6, maxHeight: 200 },
+  friendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  friendAvatarImage: { width: 40, height: 40, borderRadius: 20 },
+  friendUsername: { flex: 1, fontSize: 13, fontWeight: '600', color: COLORS.dark },
+  inviteChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(51, 92, 88, 0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  inviteChipText: { fontSize: 11, fontWeight: '700', color: COLORS.teal },
   membersHorizontalScroll: { gap: 14, paddingVertical: 4 },
   memberAvatarWrapper: { alignItems: 'center', width: 52, gap: 4 },
   avatarCircle: {
@@ -665,6 +855,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.border,
+    overflow: 'hidden',
   },
   hostAvatarBorder: { borderColor: COLORS.coral, borderWidth: 2 },
   avatarLetter: { fontSize: 14, fontWeight: '800', color: COLORS.teal },
