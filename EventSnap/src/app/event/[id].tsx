@@ -163,21 +163,27 @@ export default function EventDetailScreen() {
       }
 
       if (!photosRes.error && photosRes.data) {
-        const photosWithUrls = await Promise.all(
-          photosRes.data.map(async (p: any) => {
-            const { data: signedData } = await supabase.storage
-              .from('event-photos')
-              .createSignedUrl(p.storage_path, 3600); // valide 1h
+          const photosWithUrls = await Promise.all(
+            photosRes.data.map(async (p: any) => {
+              const { data: signedData } = await supabase.storage
+                .from('event-photos')
+                .createSignedUrl(p.storage_path, 3600);
 
-            return {
-              ...p,
-              photo_url: signedData?.signedUrl ?? '',
-              reactions: p.reactions || ['❤️', '🔥'].slice(0, Math.floor(Math.random() * 3)),
-            };
-          })
-        );
-        setPhotos(photosWithUrls);
-      }
+              // Charge les réactions pour cette photo
+              const { data: reactionsData } = await supabase
+                .from('reactions')
+                .select('emoji')
+                .eq('photo_id', p.id);
+
+              return {
+                ...p,
+                photo_url: signedData?.signedUrl ?? '',
+                reactions: reactionsData ? reactionsData.map((r: any) => r.emoji) : [],
+              };
+            })
+          );
+          setPhotos(photosWithUrls);
+        }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -281,25 +287,77 @@ export default function EventDetailScreen() {
     }
   }
 
-  function handlePhotoLongPress(photoId: string) {
-    Alert.alert('Ajouter une réaction', 'Choisissez un emoji pour réagir en direct', [
-      { text: '❤️ Love', onPress: () => addLocalReaction(photoId, '❤️') },
-      { text: '🔥 Fire', onPress: () => addLocalReaction(photoId, '🔥') },
-      { text: '😂 Haha', onPress: () => addLocalReaction(photoId, '😂') },
-      { text: '🙌 Bravo', onPress: () => addLocalReaction(photoId, '🙌') },
-      { text: 'Annuler', style: 'cancel' },
-    ]);
+  // Ajoute cette fonction après handlePhotoLongPress
+
+async function handlePhotoLongPress(photoId: string) {
+  if (!currentUserId) return;
+
+  try {
+    // Vérifie si l'utilisateur a déjà réagi à cette photo
+    const { data: existingReaction } = await supabase
+      .from('reactions')
+      .select('emoji')
+      .eq('photo_id', photoId)
+      .eq('user_id', currentUserId)
+      .maybeSingle();
+
+    if (existingReaction) {
+      // L'utilisateur a déjà réagi
+      Alert.alert(
+        'Réaction existante',
+        `Tu as déjà réagi avec ${existingReaction.emoji}. Veux-tu la changer ?`,
+        [
+          { text: 'Non', style: 'cancel' },
+          {
+            text: 'Oui, changer',
+            onPress: () => showReactionOptions(photoId, true),
+          },
+        ]
+      );
+    } else {
+      // L'utilisateur n'a pas encore réagi
+      showReactionOptions(photoId, false);
+    }
+  } catch (error: any) {
+    Alert.alert('Erreur', error.message);
+  }
+}
+
+function showReactionOptions(photoId: string, isReplacing: boolean) {
+    Alert.alert(
+      'Ajouter une réaction',
+      isReplacing ? 'Choisissez un nouvel emoji' : 'Choisissez un emoji pour réagir en direct',
+      [
+        { text: '❤️ Love', onPress: () => addReactionToDatabase(photoId, '❤️', isReplacing) },
+        { text: '🔥 Fire', onPress: () => addReactionToDatabase(photoId, '🔥', isReplacing) },
+        { text: '😂 Haha', onPress: () => addReactionToDatabase(photoId, '😂', isReplacing) },
+        { text: '🙌 Bravo', onPress: () => addReactionToDatabase(photoId, '🙌', isReplacing) },
+        { text: 'Annuler', style: 'cancel' },
+      ]
+    );
   }
 
-  function addLocalReaction(photoId: string, emoji: string) {
-    setPhotos((prev) =>
-      prev.map((p) => {
-        if (p.id === photoId) {
-          return { ...p, reactions: [...(p.reactions || []), emoji] };
-        }
-        return p;
-      })
-    );
+  async function addReactionToDatabase(photoId: string, emoji: string, isReplacing: boolean) {
+    if (!currentUserId) return;
+
+    try {
+      if (isReplacing) {
+        await supabase.from('reactions').delete().eq('photo_id', photoId).eq('user_id', currentUserId);
+      }
+
+      // Insère la nouvelle réaction
+      const { error } = await supabase.from('reactions').insert({
+        photo_id: photoId,
+        user_id: currentUserId,
+        emoji: emoji,
+      });
+
+      if (error) throw error;
+
+      await loadEventData();
+    } catch (error: any) {
+      Alert.alert('Erreur', error.message);
+    }
   }
 
   function handleAddFriend() {
@@ -473,22 +531,31 @@ export default function EventDetailScreen() {
             </View>
           ) : (
             <View style={styles.photoGrid}>
-              {photos.map((p) => (
-                <TouchableOpacity
-                  key={p.id}
-                  activeOpacity={0.8}
-                  onLongPress={() => handlePhotoLongPress(p.id)}
-                  style={styles.photoContainer}
-                >
-                  <Image source={{ uri: p.photo_url }} style={styles.photoItemCompact} />
+              {photos.map((p) => {
+                // Compte les réactions pour cette photo
+                const reactionCounts = (p.reactions || []).reduce((acc: Record<string, number>, emoji: string) => {
+                  acc[emoji] = (acc[emoji] || 0) + 1;
+                  return acc;
+                }, {});
+                const reactionEmojis = Object.keys(reactionCounts).join('');
 
-                  {p.reactions && p.reactions.length > 0 && (
-                    <View style={styles.reactionBadgeRow}>
-                      <Text style={styles.reactionBadgeText}>{p.reactions.join('')}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))}
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    activeOpacity={0.8}
+                    onLongPress={() => handlePhotoLongPress(p.id)}
+                    style={styles.photoContainer}
+                  >
+                    <Image source={{ uri: p.photo_url }} style={styles.photoItemCompact} />
+
+                    {reactionEmojis && (
+                      <View style={styles.reactionBadgeRow}>
+                        <Text style={styles.reactionBadgeText}>{reactionEmojis}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           )}
 
