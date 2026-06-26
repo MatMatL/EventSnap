@@ -22,7 +22,6 @@ import { decode } from 'base64-arraybuffer';
 import QRCode from 'react-native-qrcode-svg';
 import QRScannerModal from '../../components/QRScannerModal';
 
-
 const COLORS = {
   bgLight: '#E3EAE5',
   bgCream: '#F5F3EB',
@@ -63,6 +62,7 @@ type Photo = {
   photo_url: string;
   user_id: string;
   created_at: string;
+  storage_path: string;
   reactions?: string[];
 };
 
@@ -122,7 +122,7 @@ export default function EventDetailScreen() {
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
-  
+
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showQRModal, setShowQRModal] = useState(false);
@@ -137,10 +137,10 @@ export default function EventDetailScreen() {
     setLoading(true);
     setError(null);
 
-    const { data: { session } } = await supabase.auth.getSession();
-    setCurrentUserId(session?.user?.id ?? null);
-
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      setCurrentUserId(session?.user?.id ?? null);
+
       const [eventRes, membersRes, photosRes] = await Promise.all([
         supabase.from('events').select('*').eq('id', id).single(),
         supabase
@@ -150,22 +150,34 @@ export default function EventDetailScreen() {
           .order('joined_at', { ascending: true }),
         supabase
           .from('photos')
-          .select('*').eq('event_id', id).order('created_at', { ascending: false })
+          .select('*')
+          .eq('event_id', id)
+          .order('created_at', { ascending: false }),
       ]);
 
       if (eventRes.error) throw eventRes.error;
       setEvent(eventRes.data);
 
-      if (!membersRes.error) setMembers(membersRes.data as unknown as Member[]);
-      
-      if (!photosRes.error) {
-        const enhancedPhotos = photosRes.data.map((p: any) => ({
-          ...p,
-          reactions: p.reactions || ['❤️', '🔥'].slice(0, Math.floor(Math.random() * 3))
-        }));
-        setPhotos(enhancedPhotos);
+      if (!membersRes.error) {
+        setMembers(membersRes.data as unknown as Member[]);
       }
-      
+
+      if (!photosRes.error && photosRes.data) {
+        const photosWithUrls = await Promise.all(
+          photosRes.data.map(async (p: any) => {
+            const { data: signedData } = await supabase.storage
+              .from('event-photos')
+              .createSignedUrl(p.storage_path, 3600); // valide 1h
+
+            return {
+              ...p,
+              photo_url: signedData?.signedUrl ?? '',
+              reactions: p.reactions || ['❤️', '🔥'].slice(0, Math.floor(Math.random() * 3)),
+            };
+          })
+        );
+        setPhotos(photosWithUrls);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -180,10 +192,10 @@ export default function EventDetailScreen() {
   async function handleTakePhoto() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission requise', 'L\'accès à la caméra est nécessaire.');
+      Alert.alert('Permission requise', "L'accès à la caméra est nécessaire.");
       return;
     }
-    
+
     try {
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ['images'],
@@ -221,35 +233,46 @@ export default function EventDetailScreen() {
 
     try {
       const ext = (uri.substring(uri.lastIndexOf('.') + 1) || 'jpeg').toLowerCase();
-      const fileName = `${id}/${Date.now()}_${currentUserId}.${ext}`;
 
-      // Lecture en Base64 via FileSystem et conversion robuste en ArrayBuffer
+      // Structure attendue par la policy storage : {event_id}/{user_id}/{filename}
+      const fileName = `${id}/${currentUserId}/${Date.now()}.${ext}`;
+
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
       const arrayBuffer = decode(base64);
+      const fileSizeBytes = arrayBuffer.byteLength;
 
       const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
 
       const { error: uploadError } = await supabase.storage
-          .from('event-photos')
-          .upload(fileName, arrayBuffer, { contentType, upsert: true });
+        .from('event-photos')
+        .upload(fileName, arrayBuffer, { contentType });
 
       if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage.from('event-photos').getPublicUrl(fileName);
 
       const { error: dbError } = await supabase.from('photos').insert({
         event_id: id,
         user_id: currentUserId,
-        photo_url: publicUrl,
+        storage_path: fileName,
+        file_size_bytes: fileSizeBytes,
       });
 
       if (dbError) throw dbError;
 
-      // --- LOGIQUE NOTIFICATION RETIRÉE D'ICI ---
+      const otherMembers = members.filter((m) => m.user_id !== currentUserId);
+      const notifications = otherMembers.map((m) => ({
+        user_id: m.user_id,
+        event_id: id,
+        message: `Nouvelle photo live dans le groupe "${event?.name || 'Événement'}" !`,
+        type: 'new_photo',
+      }));
 
-      loadEventData();
+      if (notifications.length > 0) {
+        await supabase.from('notifications').insert(notifications);
+      }
+
+      await loadEventData();
       Alert.alert('Parfait !', 'Photo ajoutée à la timeline.');
     } catch (error: any) {
       Alert.alert('Erreur', error.message);
@@ -259,26 +282,24 @@ export default function EventDetailScreen() {
   }
 
   function handlePhotoLongPress(photoId: string) {
-    Alert.alert(
-      'Ajouter une réaction',
-      'Choisissez un emoji pour réagir en direct',
-      [
-        { text: '❤️ Love', onPress: () => addLocalReaction(photoId, '❤️') },
-        { text: '🔥 Fire', onPress: () => addLocalReaction(photoId, '🔥') },
-        { text: '😂 Haha', onPress: () => addLocalReaction(photoId, '😂') },
-        { text: '🙌 Bravo', onPress: () => addLocalReaction(photoId, '🙌') },
-        { text: 'Annuler', style: 'cancel' },
-      ]
-    );
+    Alert.alert('Ajouter une réaction', 'Choisissez un emoji pour réagir en direct', [
+      { text: '❤️ Love', onPress: () => addLocalReaction(photoId, '❤️') },
+      { text: '🔥 Fire', onPress: () => addLocalReaction(photoId, '🔥') },
+      { text: '😂 Haha', onPress: () => addLocalReaction(photoId, '😂') },
+      { text: '🙌 Bravo', onPress: () => addLocalReaction(photoId, '🙌') },
+      { text: 'Annuler', style: 'cancel' },
+    ]);
   }
 
   function addLocalReaction(photoId: string, emoji: string) {
-    setPhotos(prev => prev.map(p => {
-      if (p.id === photoId) {
-        return { ...p, reactions: [...(p.reactions || []), emoji] };
-      }
-      return p;
-    }));
+    setPhotos((prev) =>
+      prev.map((p) => {
+        if (p.id === photoId) {
+          return { ...p, reactions: [...(p.reactions || []), emoji] };
+        }
+        return p;
+      })
+    );
   }
 
   function handleAddFriend() {
@@ -299,34 +320,44 @@ export default function EventDetailScreen() {
   }
 
   return (
-    <LinearGradient colors={[COLORS.bgLight, COLORS.bgCream]} style={[styles.container, { paddingTop: insets.top }]}>
-      
-      {/* Header — Totalement sécurisé */}
-      <View style={styles.header}>
+    <LinearGradient colors={[COLORS.bgLight, COLORS.bgCream]} style={styles.container}>
+      {/* Header — padding top renforcé pour ne jamais être coupé par la status bar */}
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
           <Feather name="arrow-left" size={18} color={COLORS.teal} />
         </TouchableOpacity>
-        
+
         <Text style={styles.headerTitle} numberOfLines={1}>
           {event ? event.name : 'Chargement...'}
         </Text>
-        
+
         <View style={styles.headerActions}>
-          <TouchableOpacity onPress={() => setShowQRModal(!showQRModal)} style={[styles.iconButton, showQRModal && styles.activeIconBtn]}>
+          <TouchableOpacity
+            onPress={() => setShowQRModal(!showQRModal)}
+            style={[styles.iconButton, showQRModal && styles.activeIconBtn]}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <Ionicons name="qr-code-outline" size={18} color={showQRModal ? COLORS.white : COLORS.teal} />
           </TouchableOpacity>
-          {isHost && (
-            <View style={styles.hostBadge}><Text style={styles.hostBadgeText}>HOST</Text></View>
-          )}
-          <TouchableOpacity onPress={() => setShowScanModal(true)} style={styles.iconButton}>
+
+          <TouchableOpacity
+            onPress={() => setShowScanModal(true)}
+            style={styles.iconButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <Feather name="camera" size={18} color={COLORS.teal} />
           </TouchableOpacity>
+
+          {isHost && (
+            <View style={styles.hostBadge}>
+              <Text style={styles.hostBadgeText}>HOST</Text>
+            </View>
+          )}
         </View>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
-        {/* Modal QR Code intégré — Totalement sécurisé */}
+        {/* Modal QR Code intégré */}
         {showQRModal && (
           <View style={styles.qrCard}>
             <View style={styles.qrHeader}>
@@ -336,8 +367,8 @@ export default function EventDetailScreen() {
               </TouchableOpacity>
             </View>
             <Text style={styles.qrSubtitle}>Scannez ce code pour rejoindre instantanément et uploader vos photos.</Text>
-            
-            <View style={{ padding: 12, backgroundColor: COLORS.white, borderRadius: 14 }}>
+
+            <View style={styles.qrCodeWrapper}>
               <QRCode
                 value={`myapp://event/join?id=${event?.id}`}
                 size={140}
@@ -351,16 +382,14 @@ export default function EventDetailScreen() {
           </View>
         )}
 
-        {/* Détails Principaux — Totalement sécurisés */}
+        {/* Détails Principaux */}
         <View style={styles.transparentCard}>
           <View style={styles.mainTitleRow}>
             <Text style={styles.eventName}>{event ? event.name : 'Événement'}</Text>
             <TimeRemaining expiresAt={event?.expires_at} />
           </View>
-          
-          {event && event.description ? (
-            <Text style={styles.description}>{event.description}</Text>
-          ) : null}
+
+          {event && event.description ? <Text style={styles.description}>{event.description}</Text> : null}
 
           <View style={styles.metaRow}>
             <View style={styles.metaItem}>
@@ -370,7 +399,9 @@ export default function EventDetailScreen() {
             {event && event.location_label ? (
               <View style={styles.metaItem}>
                 <Feather name="map-pin" size={13} color={COLORS.tealLight} />
-                <Text style={styles.metaText} numberOfLines={1}>{event.location_label}</Text>
+                <Text style={styles.metaText} numberOfLines={1}>
+                  {event.location_label}
+                </Text>
               </View>
             ) : null}
           </View>
@@ -388,7 +419,7 @@ export default function EventDetailScreen() {
             </View>
 
             <TouchableOpacity style={styles.addFriendBtn} onPress={() => setShowSearch(!showSearch)}>
-              <Feather name={showSearch ? "minus" : "plus"} size={16} color={COLORS.white} />
+              <Feather name={showSearch ? 'minus' : 'plus'} size={16} color={COLORS.white} />
               <Text style={styles.addFriendBtnText}>Ajouter</Text>
             </TouchableOpacity>
           </View>
@@ -415,7 +446,9 @@ export default function EventDetailScreen() {
                 <View style={[styles.avatarCircle, m.role === 'host' && styles.hostAvatarBorder]}>
                   <Text style={styles.avatarLetter}>{(m.profiles?.username ?? '?')[0].toUpperCase()}</Text>
                 </View>
-                <Text style={styles.memberMiniName} numberOfLines={1}>{m.profiles?.username ?? 'User'}</Text>
+                <Text style={styles.memberMiniName} numberOfLines={1}>
+                  {m.profiles?.username ?? 'User'}
+                </Text>
               </View>
             ))}
           </ScrollView>
@@ -440,15 +473,15 @@ export default function EventDetailScreen() {
             </View>
           ) : (
             <View style={styles.photoGrid}>
-              {photos.map(p => (
-                <TouchableOpacity 
-                  key={p.id} 
+              {photos.map((p) => (
+                <TouchableOpacity
+                  key={p.id}
                   activeOpacity={0.8}
                   onLongPress={() => handlePhotoLongPress(p.id)}
                   style={styles.photoContainer}
                 >
                   <Image source={{ uri: p.photo_url }} style={styles.photoItemCompact} />
-                  
+
                   {p.reactions && p.reactions.length > 0 && (
                     <View style={styles.reactionBadgeRow}>
                       <Text style={styles.reactionBadgeText}>{p.reactions.join('')}</Text>
@@ -464,7 +497,7 @@ export default function EventDetailScreen() {
               <Feather name="image" size={16} color={COLORS.teal} />
               <Text style={[styles.actionBtnText, { color: COLORS.teal }]}>Album</Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={handleTakePhoto} disabled={uploading}>
               {uploading ? (
                 <ActivityIndicator color={COLORS.white} size="small" />
@@ -478,8 +511,8 @@ export default function EventDetailScreen() {
           </View>
           <Text style={styles.hintText}>💡 Reste appuyé longuement sur une photo pour y ajouter une réaction emoji.</Text>
         </View>
-
       </ScrollView>
+
       <QRScannerModal
         visible={showScanModal}
         onClose={() => setShowScanModal(false)}
@@ -501,20 +534,39 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingBottom: 32, gap: 14 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
   iconButton: { backgroundColor: COLORS.white, padding: 9, borderRadius: 12, elevation: 1 },
   activeIconBtn: { backgroundColor: COLORS.teal },
   headerTitle: { flex: 1, fontSize: 16, fontWeight: '800', color: COLORS.teal, textAlign: 'center', marginHorizontal: 8 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   hostBadge: { backgroundColor: COLORS.coral, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3 },
   hostBadgeText: { color: COLORS.white, fontSize: 9, fontWeight: '800' },
-  transparentCard: { backgroundColor: 'rgba(255, 255, 255, 0.65)', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.4)', gap: 12 },
+  transparentCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.65)',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    gap: 12,
+  },
   qrCard: { backgroundColor: COLORS.white, borderRadius: 20, padding: 16, gap: 10, borderWidth: 1.5, borderColor: COLORS.tealLight },
   qrHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   qrTitle: { fontSize: 14, fontWeight: '800', color: COLORS.teal },
   qrSubtitle: { fontSize: 12, color: '#666', lineHeight: 16 },
-  qrCorner: { position: 'absolute', width: 14, height: 14, borderColor: COLORS.teal, borderWidth: 3, borderRadius: 2 },
-  qrCodeId: { fontSize: 11, fontWeight: '700', color: COLORS.muted, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
+  qrCodeWrapper: { alignSelf: 'center', padding: 12, backgroundColor: COLORS.white, borderRadius: 14 },
+  qrCodeId: {
+    alignSelf: 'center',
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.muted,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
   mainTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
   eventName: { flex: 1, fontSize: 19, fontWeight: '800', color: COLORS.dark },
   description: { fontSize: 13, color: '#444', lineHeight: 18 },
@@ -537,7 +589,16 @@ const styles = StyleSheet.create({
   searchSubmitBtn: { width: 40, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.inputBg },
   membersHorizontalScroll: { gap: 14, paddingVertical: 4 },
   memberAvatarWrapper: { alignItems: 'center', width: 52, gap: 4 },
-  avatarCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.white, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
+  avatarCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
   hostAvatarBorder: { borderColor: COLORS.coral, borderWidth: 2 },
   avatarLetter: { fontSize: 14, fontWeight: '800', color: COLORS.teal },
   memberMiniName: { fontSize: 10, fontWeight: '600', color: COLORS.dark, textAlign: 'center' },
