@@ -328,10 +328,10 @@ function showReactionOptions(photoId: string, isReplacing: boolean) {
       'Ajouter une réaction',
       isReplacing ? 'Choisissez un nouvel emoji' : 'Choisissez un emoji pour réagir en direct',
       [
-        { text: '❤️ Love', onPress: () => addReactionToDatabase(photoId, '❤️', isReplacing) },
-        { text: '🔥 Fire', onPress: () => addReactionToDatabase(photoId, '🔥', isReplacing) },
-        { text: '😂 Haha', onPress: () => addReactionToDatabase(photoId, '😂', isReplacing) },
-        { text: '🙌 Bravo', onPress: () => addReactionToDatabase(photoId, '🙌', isReplacing) },
+        { text: '❤️', onPress: () => addReactionToDatabase(photoId, '❤️', isReplacing) },
+        { text: '🔥', onPress: () => addReactionToDatabase(photoId, '🔥', isReplacing) },
+        { text: '😂', onPress: () => addReactionToDatabase(photoId, '😂', isReplacing) },
+        { text: '🙌', onPress: () => addReactionToDatabase(photoId, '🙌', isReplacing) },
         { text: 'Annuler', style: 'cancel' },
       ]
     );
