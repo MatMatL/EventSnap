@@ -9,7 +9,7 @@ import {
   Alert,
   ScrollView,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,10 +24,11 @@ import {
 import type { EventPhoto } from '@/types/photo';
 import EventPhotoGrid, { showReactionPicker } from '@/components/gallery/EventPhotoGrid';
 import PhotoViewerModal from '@/components/gallery/PhotoViewerModal';
+import { useSafeBack } from '@/hooks/use-safe-back';
 
 export default function EventGalleryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
+  const goBack = useSafeBack(id ? `/event/${id}` : '/(tabs)/events');
   const insets = useSafeAreaInsets();
 
   const [eventName, setEventName] = useState('');
@@ -171,7 +172,7 @@ export default function EventGalleryScreen() {
   return (
     <LinearGradient colors={[COLORS.bgLight, COLORS.bgCream]} style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
+        <TouchableOpacity onPress={goBack} style={styles.iconButton}>
           <Feather name="arrow-left" size={18} color={COLORS.teal} />
         </TouchableOpacity>
 

@@ -21,6 +21,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import QRCode from 'react-native-qrcode-svg';
 import QRScannerModal from '../../components/QRScannerModal';
+import { useSafeBack } from '../../hooks/use-safe-back';
 
 const COLORS = {
   bgLight: '#E3EAE5',
@@ -122,6 +123,7 @@ function TimeRemaining({ expiresAt }: { expiresAt?: string }) {
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const goBack = useSafeBack('/(tabs)/events');
   const insets = useSafeAreaInsets();
   const [showScanModal, setShowScanModal] = useState(false);
 
@@ -413,7 +415,7 @@ export default function EventDetailScreen() {
     <LinearGradient colors={[COLORS.bgLight, COLORS.bgCream]} style={styles.container}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
+        <TouchableOpacity onPress={goBack} style={styles.iconButton}>
           <Feather name="arrow-left" size={18} color={COLORS.teal} />
         </TouchableOpacity>
 
