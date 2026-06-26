@@ -1,3 +1,5 @@
+const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+
 export default {
   expo: {
     name: 'EventSnap',
@@ -8,16 +10,15 @@ export default {
     scheme: 'eventsnap',
     userInterfaceStyle: 'automatic',
     ios: {
+      bundleIdentifier: 'com.eventsnap.app',
       icon: './assets/expo.icon',
       infoPlist: {
         NSLocationWhenInUseUsageDescription:
           'EventSnap utilise votre position pour afficher les sorties à proximité sur la carte.',
       },
-      config: {
-        googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
-      },
     },
     android: {
+      package: 'com.eventsnap.app',
       adaptiveIcon: {
         backgroundColor: '#E6F4FE',
         foregroundImage: './assets/images/android-icon-foreground.png',
@@ -26,11 +27,6 @@ export default {
       },
       permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'],
       predictiveBackGestureEnabled: false,
-      config: {
-        googleMaps: {
-          apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
-        },
-      },
     },
     web: {
       output: 'static',
@@ -45,6 +41,13 @@ export default {
             'EventSnap utilise votre position pour localiser vos événements.',
           locationWhenInUsePermission:
             'EventSnap utilise votre position pour afficher les sorties à proximité sur la carte.',
+        },
+      ],
+      [
+        'react-native-maps',
+        {
+          androidGoogleMapsApiKey: googleMapsApiKey,
+          iosGoogleMapsApiKey: googleMapsApiKey,
         },
       ],
       [
