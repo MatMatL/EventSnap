@@ -135,12 +135,12 @@ export default function ProfileScreen() {
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           
-          <View style={styles.topBar}>
-            <Text style={styles.topLogo}>Profile</Text>
-            <TouchableOpacity style={styles.settingsButton}>
-              <Ionicons name="settings-outline" size={22} color="#335C58" />
-            </TouchableOpacity>
-          </View>s
+                  <View style={styles.topBar}>
+                    <Text style={styles.topLogo}>EventSnap <Text style={{fontWeight: '400', fontSize: 20}}>Social</Text></Text>
+                    <TouchableOpacity style={styles.iconButton}>
+                      <Ionicons name="refresh-outline" size={20} color="#335C58" />
+                    </TouchableOpacity>
+                  </View>
 
           <View style={styles.avatarSection}>
             <TouchableOpacity style={styles.avatarWrapper} onPress={uploadAvatar} disabled={uploading}>
@@ -288,5 +288,7 @@ const styles = StyleSheet.create({
   menuCard: { backgroundColor: '#FFFFFF', borderRadius: 24, paddingVertical: 8, boxShadow: '0px 4px 10px rgba(0,0,0,0.04)', elevation: 2 },
   menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 20 },
   menuItemText: { flex: 1, marginLeft: 14, fontSize: 15, fontWeight: '600', color: '#333' },
-  menuLineDivider: { height: 1, backgroundColor: '#F4F2EB', marginHorizontal: 20 }
+  menuLineDivider: { height: 1, backgroundColor: '#F4F2EB', marginHorizontal: 20 },
+  iconButton: { backgroundColor: '#FFFFFF', padding: 8, borderRadius: 12, elevation: 2 },
+
 });
