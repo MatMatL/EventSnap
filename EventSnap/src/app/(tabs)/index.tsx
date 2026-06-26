@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { MapHeader } from '@/components/map/MapHeader';
 import { MapSearchBar } from '@/components/map/MapSearchBar';
 import { EventMap } from '@/components/map/EventMap';
@@ -15,7 +14,20 @@ import { NearbyEventsSheet } from '@/components/map/NearbyEventsSheet';
 import { useUserLocation } from '@/hooks/useUserLocation';
 import { useAccessibleEvents } from '@/hooks/useAccessibleEvents';
 import { enrichWithDistance, filterEvents } from '@/lib/geo';
-import { Colors } from '@/constants/Colors';
+
+const COLORS = {
+  bgGradientStart: '#E5F0ED',
+  bgGradientEnd: '#F5F3EB',
+  teal: '#335C58',
+  tealLight: '#2BA8A2',
+  yellow: '#FFD23F',
+  coral: '#EF6C4A',
+  white: '#FFFFFF',
+  border: '#E8E5DC',
+  inputBg: '#F4F2EB',
+  muted: '#888888',
+  dark: '#1A1A1A',
+};
 
 export default function MapScreen() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -56,10 +68,11 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView edges={['top']} style={styles.safeTop}>
+      {/* Container du haut gérant la hauteur de l'encoche / caméra */}
+      <View style={styles.safeTop}>
         <MapHeader />
         <MapSearchBar value={searchQuery} onChangeText={setSearchQuery} />
-      </SafeAreaView>
+      </View>
 
       <View style={styles.mapContainer}>
         {Platform.OS !== 'web' && (
@@ -81,7 +94,7 @@ export default function MapScreen() {
 
         {isLoading && (
           <View style={styles.overlay} pointerEvents="none">
-            <ActivityIndicator size="large" color={Colors.primary} />
+            <ActivityIndicator size="large" color={COLORS.teal} />
             <Text style={styles.overlayText}>Chargement de la carte…</Text>
           </View>
         )}
@@ -124,11 +137,14 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#E5F0ED', // Couleur de départ du fond global
   },
   safeTop: {
-    backgroundColor: Colors.background,
+    backgroundColor: '#E5F0ED',
     zIndex: 2,
+    // Même règle de hauteur millimétrée que pour events et create :
+    paddingTop: Platform.OS === 'ios' ? 12 : 36, 
+    paddingBottom: 4,
   },
   mapContainer: {
     flex: 1,
@@ -137,7 +153,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(255, 248, 231, 0.92)',
+    backgroundColor: 'rgba(245, 243, 235, 0.92)', // Correspond à ton fond crème de DA
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
@@ -145,34 +161,35 @@ const styles = StyleSheet.create({
   },
   overlayText: {
     marginTop: 12,
-    fontSize: 15,
-    color: '#335C58',
+    fontSize: 14,
+    color: COLORS.teal,
     fontWeight: '600',
   },
   errorTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
-    color: '#335C58',
+    color: COLORS.teal,
     textAlign: 'center',
   },
   errorMessage: {
     marginTop: 8,
-    fontSize: 14,
-    color: '#8A9A98',
+    fontSize: 13,
+    color: COLORS.muted,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 18,
+    fontWeight: '500',
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: Colors.primary,
+    backgroundColor: COLORS.teal,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 999,
   },
   retryText: {
-    color: '#FFFFFF',
+    color: COLORS.white,
     fontWeight: '700',
-    fontSize: 15,
+    fontSize: 14,
   },
   permissionBanner: {
     position: 'absolute',
@@ -185,22 +202,23 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: '#FFF3E8',
-    borderRadius: 12,
+    backgroundColor: '#FFF0EC', // Harmonisé avec tes bannières d'alertes
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#FFD9C2',
+    borderColor: '#FFCDC0',
     zIndex: 3,
   },
   permissionText: {
     flex: 1,
     fontSize: 12,
-    color: '#8A5A3C',
+    color: COLORS.coral,
     lineHeight: 16,
+    fontWeight: '500',
   },
   permissionAction: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.coral,
+    color: COLORS.teal,
   },
   sheetOverlay: {
     position: 'absolute',
@@ -214,12 +232,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
-    backgroundColor: '#E8F6F5',
+    backgroundColor: '#E5F0ED',
   },
   webFallbackText: {
     fontSize: 15,
-    color: '#335C58',
+    color: COLORS.teal,
     textAlign: 'center',
     lineHeight: 22,
+    fontWeight: '500',
   },
 });
