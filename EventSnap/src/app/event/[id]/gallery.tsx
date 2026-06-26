@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import {
   downloadPhotosToDevice,
   getUserReaction,
   toggleReaction,
+  resolveSelectedPhotos,
 } from '@/lib/eventPhotos';
 import type { EventPhoto } from '@/types/photo';
 import EventPhotoGrid, { showReactionPicker } from '@/components/gallery/EventPhotoGrid';
@@ -41,6 +42,11 @@ export default function EventGalleryScreen() {
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+
+  const photosRef = useRef(photos);
+  const selectedPhotoIdsRef = useRef(selectedPhotoIds);
+  photosRef.current = photos;
+  selectedPhotoIdsRef.current = selectedPhotoIds;
 
   const loadGallery = useCallback(async () => {
     if (!id) return;
@@ -111,10 +117,13 @@ export default function EventGalleryScreen() {
     }
   };
 
-  const handleDownloadSelected = () => {
-    const selected = photos.filter((p) => selectedPhotoIds.includes(p.id));
+  const handleDownloadSelected = useCallback(() => {
+    const selected = resolveSelectedPhotos(
+      photosRef.current,
+      selectedPhotoIdsRef.current
+    );
     runDownload(selected);
-  };
+  }, []);
 
   const handleDownloadAll = () => {
     Alert.alert(
@@ -122,7 +131,7 @@ export default function EventGalleryScreen() {
       `Sauvegarder les ${photos.length} photos dans ta galerie ?`,
       [
         { text: 'Annuler', style: 'cancel' },
-        { text: 'Télécharger', onPress: () => runDownload(photos) },
+        { text: 'Télécharger', onPress: () => runDownload(photosRef.current) },
       ]
     );
   };

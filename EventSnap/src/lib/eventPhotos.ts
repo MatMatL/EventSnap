@@ -71,8 +71,52 @@ async function requestMediaLibraryPermission(): Promise<boolean> {
   return false;
 }
 
+async function writeBlobToFile(blob: Blob, fileUri: string): Promise<void> {
+  const base64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        reject(new Error('Lecture du fichier impossible'));
+        return;
+      }
+      const comma = result.indexOf(',');
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('Lecture du fichier impossible'));
+    reader.readAsDataURL(blob);
+  });
+
+  await FileSystem.writeAsStringAsync(fileUri, base64, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+}
+
+async function downloadStoragePhoto(storagePath: string, fileUri: string): Promise<void> {
+  const { data, error } = await supabase.storage.from('event-photos').download(storagePath);
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Impossible de récupérer la photo');
+  }
+  await writeBlobToFile(data, fileUri);
+}
+
+function getFileExtension(storagePath: string): string {
+  return storagePath.split('.').pop()?.toLowerCase() || 'jpg';
+}
+
+/** Résout les photos sélectionnées dans l'ordre de sélection (par ID). */
+export function resolveSelectedPhotos(
+  photos: EventPhoto[],
+  selectedPhotoIds: string[]
+): EventPhoto[] {
+  const byId = new Map(photos.map((photo) => [photo.id, photo]));
+  return selectedPhotoIds
+    .map((photoId) => byId.get(photoId))
+    .filter((photo): photo is EventPhoto => photo != null);
+}
+
 export async function downloadPhotosToDevice(
-  photos: Pick<EventPhoto, 'photo_url' | 'storage_path'>[]
+  photos: Pick<EventPhoto, 'id' | 'storage_path'>[]
 ): Promise<number> {
   if (photos.length === 0) return 0;
 
@@ -91,13 +135,12 @@ export async function downloadPhotosToDevice(
 
   let downloadedCount = 0;
 
-  for (let i = 0; i < photos.length; i++) {
-    const photo = photos[i];
-    const ext = photo.storage_path.split('.').pop()?.toLowerCase() || 'jpg';
-    const tempUri = `${FileSystem.cacheDirectory}eventsnap_${Date.now()}_${i}.${ext}`;
+  for (const photo of photos) {
+    const ext = getFileExtension(photo.storage_path);
+    const tempUri = `${FileSystem.cacheDirectory}eventsnap_${photo.id}_${Date.now()}.${ext}`;
 
-    const { uri } = await FileSystem.downloadAsync(photo.photo_url, tempUri);
-    const asset = await MediaLibrary.createAssetAsync(uri);
+    await downloadStoragePhoto(photo.storage_path, tempUri);
+    const asset = await MediaLibrary.createAssetAsync(tempUri);
 
     if (album) {
       await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
