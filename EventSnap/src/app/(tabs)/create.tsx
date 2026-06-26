@@ -108,7 +108,7 @@ export default function CreateEventScreen() {
             </TouchableOpacity>
             <View style={styles.headerCenter}>
               <Text style={styles.headerTitle}>
-                EventSnap <Text style={{ fontWeight: '400', fontSize: 22 }}>Create</Text>
+                EventSnap <Text style={{ fontWeight: '400', fontSize: 22 }}>Création</Text>
               </Text>
             </View>
             <View style={{ width: 40 }} />
