@@ -21,6 +21,7 @@ type MapDebugState = {
   layout: MapLayout | null;
   mapReady: boolean;
   mapLoaded: boolean;
+  tilesTimedOut: boolean;
   provider: string;
   runtime: string;
   apiKeyConfigured: boolean;
@@ -28,6 +29,7 @@ type MapDebugState = {
 };
 
 const DELTA = 0.08;
+const TILES_TIMEOUT_MS = 8000;
 
 const isExpoGo =
   Constants.executionEnvironment === ExecutionEnvironment.StoreClient &&
@@ -46,12 +48,18 @@ function getRuntimeLabel(): string {
   }
 }
 
-function getSetupHint(): string {
+function getSetupHint(tilesTimedOut: boolean): string {
   if (Platform.OS === 'web') {
     return 'Carte non supportée sur web.';
   }
+  if (isExpoGo && Platform.OS === 'android') {
+    if (tilesTimedOut) {
+      return 'Expo Go Android ne charge plus les tuiles Google (SDK 55+). Lancez : npx expo run:android';
+    }
+    return 'Expo Go Android : ta clé .env est ignorée. Si tuiles bloquées → build natif requis.';
+  }
   if (isExpoGo) {
-    return 'Expo Go : la clé .env est ignorée. Écran noir = layout ou Expo Go obsolète.';
+    return 'Expo Go iOS : Apple Maps devrait fonctionner sans clé.';
   }
   if (!process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY) {
     return 'Clé API absente — ajoutez EXPO_PUBLIC_GOOGLE_MAPS_API_KEY au .env.';
@@ -72,10 +80,23 @@ function MapDebugPanel({ debug }: { debug: MapDebugState }) {
       </Text>
       <Text style={styles.debugLine}>Map ready : {debug.mapReady ? 'oui' : 'non'}</Text>
       <Text style={styles.debugLine}>Tiles loaded : {debug.mapLoaded ? 'oui' : 'non'}</Text>
+      {debug.tilesTimedOut && (
+        <Text style={styles.debugWarning}>Timeout tuiles ({TILES_TIMEOUT_MS / 1000}s)</Text>
+      )}
       <Text style={styles.debugLine}>
         Clé API (.env) : {debug.apiKeyConfigured ? 'présente' : 'absente'}
       </Text>
       <Text style={styles.debugHint}>{debug.hint}</Text>
+    </View>
+  );
+}
+
+function MapTilesErrorBanner({ message }: { message: string }) {
+  return (
+    <View style={styles.errorBanner}>
+      <Text style={styles.errorBannerTitle}>Carte indisponible dans Expo Go</Text>
+      <Text style={styles.errorBannerText}>{message}</Text>
+      <Text style={styles.errorBannerCmd}>npx expo run:android</Text>
     </View>
   );
 }
@@ -90,6 +111,7 @@ export function EventMap({
   const [layout, setLayout] = useState<MapLayout | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [tilesTimedOut, setTilesTimedOut] = useState(false);
 
   const provider = Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined;
 
@@ -114,6 +136,26 @@ export function EventMap({
     );
   }, [userCoords.latitude, userCoords.longitude, mapReady]);
 
+  useEffect(() => {
+    if (mapLoaded) return;
+
+    const timer = setTimeout(() => {
+      if (!mapLoaded) {
+        setTilesTimedOut(true);
+        if (__DEV__) {
+          console.warn(
+            '[EventMap] Timeout tuiles —',
+            isExpoGo && Platform.OS === 'android'
+              ? 'Expo Go Android ne supporte plus Google Maps. Utilisez npx expo run:android'
+              : 'Vérifiez la clé API Google et Maps SDK for Android',
+          );
+        }
+      }
+    }, TILES_TIMEOUT_MS);
+
+    return () => clearTimeout(timer);
+  }, [mapLoaded, mapReady]);
+
   if (Platform.OS === 'web') {
     return null;
   }
@@ -122,11 +164,15 @@ export function EventMap({
     layout,
     mapReady,
     mapLoaded,
+    tilesTimedOut,
     provider: Platform.OS === 'android' ? 'Google (Android)' : 'Apple Maps (iOS)',
     runtime: getRuntimeLabel(),
     apiKeyConfigured: Boolean(process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY),
-    hint: getSetupHint(),
+    hint: getSetupHint(tilesTimedOut),
   };
+
+  const showExpoGoAndroidError =
+    tilesTimedOut && isExpoGo && Platform.OS === 'android' && mapReady && !mapLoaded;
 
   return (
     <View
@@ -149,11 +195,12 @@ export function EventMap({
         onMapReady={() => {
           setMapReady(true);
           if (__DEV__) {
-            console.log('[EventMap] onMapReady', { layout, runtime: debug.runtime });
+            console.log('[EventMap] onMapReady', { runtime: getRuntimeLabel() });
           }
         }}
         onMapLoaded={() => {
           setMapLoaded(true);
+          setTilesTimedOut(false);
           if (__DEV__) {
             console.log('[EventMap] onMapLoaded — tuiles chargées');
           }
@@ -178,12 +225,16 @@ export function EventMap({
         })}
       </MapView>
 
-      {!mapLoaded && (
+      {!mapLoaded && !showExpoGoAndroidError && (
         <View style={styles.loadingHint} pointerEvents="none">
           <Text style={styles.loadingHintText}>
             {mapReady ? 'Chargement des tuiles…' : 'Initialisation de la carte…'}
           </Text>
         </View>
+      )}
+
+      {showExpoGoAndroidError && (
+        <MapTilesErrorBanner message="Depuis Expo SDK 55, Google Maps ne charge plus les tuiles dans Expo Go sur Android. Ta clé API ne peut être utilisée qu'avec un build natif (dev client)." />
       )}
 
       <MapDebugPanel debug={debug} />
@@ -214,6 +265,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  errorBanner: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(255, 248, 231, 0.96)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 28,
+    zIndex: 6,
+    gap: 10,
+  },
+  errorBannerTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#335C58',
+    textAlign: 'center',
+  },
+  errorBannerText: {
+    fontSize: 14,
+    color: '#555',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  errorBannerCmd: {
+    marginTop: 6,
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.coral,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    backgroundColor: '#FFF0EC',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
   debugPanel: {
     position: 'absolute',
     top: 48,
@@ -235,6 +319,12 @@ const styles = StyleSheet.create({
   debugLine: {
     color: '#FFFFFF',
     fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  debugWarning: {
+    color: '#FF8A65',
+    fontSize: 11,
+    fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   debugHint: {
