@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, Alert, TextInput, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, Alert, TextInput, Dimensions, Platform } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../lib/supabase';
@@ -140,7 +140,7 @@ export default function ProfileScreen() {
             <TouchableOpacity style={styles.settingsButton}>
               <Ionicons name="settings-outline" size={22} color="#335C58" />
             </TouchableOpacity>
-          </View>
+          </View>s
 
           <View style={styles.avatarSection}>
             <TouchableOpacity style={styles.avatarWrapper} onPress={uploadAvatar} disabled={uploading}>
@@ -247,7 +247,10 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  safeArea: { flex: 1 },
+  safeArea: { 
+      flex: 1, 
+      marginTop: Platform.OS === 'ios' ? 12 : 36, 
+    },
   scrollContent: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 40 },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   topLogo: { fontSize: 24, fontWeight: '800', color: '#335C58' },

@@ -12,12 +12,14 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../../lib/supabase';
 import QRScannerModal from '../../components/QRScannerModal';
 
 const COLORS = {
-  cream: '#FFF8E7',
+  bgGradientStart: '#E5F0ED',
+  bgGradientEnd: '#F5F3EB',
   teal: '#335C58',
   tealLight: '#2BA8A2',
   yellow: '#FFD23F',
@@ -25,7 +27,7 @@ const COLORS = {
   white: '#FFFFFF',
   border: '#E8E5DC',
   inputBg: '#F4F2EB',
-  muted: '#A0A0A0',
+  muted: '#888888',
   dark: '#1A1A1A',
 };
 
@@ -69,10 +71,10 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 const FILTER_LABELS: Record<FilterTab, string> = {
-  current: 'Current',
-  hosted: 'Hosted',
-  invited: 'Invited',
-  past: 'Past',
+  current: 'Actuels',
+  hosted: 'Créés',
+  invited: 'Invitations',
+  past: 'Passés',
 };
 
 function formatDate(iso: string) {
@@ -201,7 +203,7 @@ function InvitationCard({
     <View style={[styles.card, styles.invitationCard]}>
       <View style={styles.invitationHeader}>
         <View style={styles.invitationIcon}>
-          <Feather name="mail" size={16} color={COLORS.coral} />
+          <Ionicons name="mail-open-outline" size={18} color={COLORS.coral} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.invitationFrom}>
@@ -246,17 +248,17 @@ function EmptyState({ filter }: { filter: FilterTab }) {
       title: 'Aucun événement en cours',
       sub: 'Rejoins un événement ou crées-en un !',
       cta: 'Créer un événement',
-      action: () => router.push('/(tabs)/create'),
+      action: () => router.push('/(tabs)/create' as any),
     },
     hosted: {
       icon: 'star' as const,
       title: 'Tu n\'héberges aucun événement',
       sub: 'Lance ta première sortie en appuyant sur le bouton +.',
       cta: 'Créer un événement',
-      action: () => router.push('/(tabs)/create'),
+      action: () => router.push('/(tabs)/create' as any),
     },
     invited: {
-      icon: 'inbox' as const,
+      icon: 'mail' as const,
       title: 'Aucune invitation',
       sub: 'Tu n\'as pas d\'invitation en attente.',
       cta: 'Explorer les événements',
@@ -275,7 +277,7 @@ function EmptyState({ filter }: { filter: FilterTab }) {
   return (
     <View style={styles.emptyState}>
       <View style={styles.emptyIconWrap}>
-        <Feather name={icon} size={32} color={COLORS.border} />
+        <Feather name={icon} size={28} color={COLORS.teal} />
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptySub}>{sub}</Text>
@@ -454,140 +456,167 @@ export default function EventsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.centered}>
-        <ActivityIndicator color={COLORS.teal} size="large" />
-        <Text style={styles.loadingText}>Chargement des événements…</Text>
-      </SafeAreaView>
+      <LinearGradient colors={[COLORS.bgGradientStart, COLORS.bgGradientEnd]} style={styles.container}>
+        <SafeAreaView style={styles.centered}>
+          <ActivityIndicator color={COLORS.teal} size="large" />
+          <Text style={styles.loadingText}>Chargement des événements…</Text>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   if (error) {
     return (
-      <SafeAreaView style={styles.centered}>
-        <Feather name="alert-circle" size={36} color={COLORS.coral} />
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryBtn} onPress={() => { setLoading(true); loadData().finally(() => setLoading(false)); }}>
-          <Text style={styles.retryBtnText}>Réessayer</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
+      <LinearGradient colors={[COLORS.bgGradientStart, COLORS.bgGradientEnd]} style={styles.container}>
+        <SafeAreaView style={styles.centered}>
+          <Feather name="alert-circle" size={36} color={COLORS.coral} />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => { setLoading(true); loadData().finally(() => setLoading(false)); }}>
+            <Text style={styles.retryBtnText}>Réessayer</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      {/* ── Header ── */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Événements</Text>
-        <TouchableOpacity 
-          style={styles.scanButton} 
-          onPress={() => setShowScanModal(true)}
-        >
-          <Feather name="camera" size={18} color={COLORS.white} />
-        </TouchableOpacity>
-      </View>
+    <LinearGradient colors={[COLORS.bgGradientStart, COLORS.bgGradientEnd]} style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        {/* ── Header ── */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>
+            EventSnap <Text style={{ fontWeight: '400', fontSize: 24 }}>Events</Text>
+          </Text>
+          <TouchableOpacity 
+            style={styles.scanButton} 
+            onPress={() => setShowScanModal(true)}
+          >
+            <Ionicons name="qr-code-outline" size={18} color={COLORS.teal} />
+          </TouchableOpacity>
+        </View>
 
-      {/* ── Filter chips ── */}
-      <View style={styles.chipsRow}>
-        {(Object.keys(FILTER_LABELS) as FilterTab[]).map((tab) => (
-          <FilterChip
-            key={tab}
-            label={FILTER_LABELS[tab]}
-            active={filter === tab}
-            count={counts[tab]}
-            onPress={() => setFilter(tab)}
+        {/* ── Filter chips ── */}
+        <View style={styles.chipsRow}>
+          {(Object.keys(FILTER_LABELS) as FilterTab[]).map((tab) => (
+            <FilterChip
+              key={tab}
+              label={FILTER_LABELS[tab]}
+              active={filter === tab}
+              count={counts[tab]}
+              onPress={() => setFilter(tab)}
+            />
+          ))}
+        </View>
+
+        {/* ── Liste ── */}
+        {filter === 'invited' ? (
+          <FlatList
+            data={invitations}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[COLORS.teal]} tintColor={COLORS.teal} />}
+            ListEmptyComponent={<EmptyState filter="invited" />}
+            renderItem={({ item }) => (
+              <InvitationCard
+                invitation={item}
+                onAccept={() => handleAccept(item.id)}
+                onDecline={() => handleDecline(item.id)}
+              />
+            )}
           />
-        ))}
-      </View>
-
-      {/* ── Liste ── */}
-      {filter === 'invited' ? (
-        <FlatList
-          data={invitations}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={COLORS.teal} />}
-          ListEmptyComponent={<EmptyState filter="invited" />}
-          renderItem={({ item }) => (
-            <InvitationCard
-              invitation={item}
-              onAccept={() => handleAccept(item.id)}
-              onDecline={() => handleDecline(item.id)}
-            />
-          )}
-        />
-      ) : (
-        <FlatList
-          data={dataForFilter[filter]}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={COLORS.teal} />}
-          ListEmptyComponent={<EmptyState filter={filter} />}
-          ListHeaderComponent={
-            filter === 'current' && liveEvents.length > 0 ? (
-              <View style={styles.sectionHeader}>
-                <View style={styles.liveDot} />
-                <Text style={styles.sectionHeaderText}>Live Now</Text>
-                <View style={styles.sectionBadge}>
-                  <Text style={styles.sectionBadgeText}>{liveEvents.length} actif{liveEvents.length > 1 ? 's' : ''}</Text>
+        ) : (
+          <FlatList
+            data={dataForFilter[filter]}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[COLORS.teal]} tintColor={COLORS.teal} />}
+            ListEmptyComponent={<EmptyState filter={filter} />}
+            ListHeaderComponent={
+              filter === 'current' && liveEvents.length > 0 ? (
+                <View style={styles.sectionHeader}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.sectionHeaderText}>Live Now</Text>
+                  <View style={styles.sectionBadge}>
+                    <Text style={styles.sectionBadgeText}>{liveEvents.length} actif{liveEvents.length > 1 ? 's' : ''}</Text>
+                  </View>
                 </View>
-              </View>
-            ) : filter === 'hosted' && hostedEvents.length > 0 ? (
-              <View style={styles.sectionHeader}>
-                <Feather name="star" size={14} color={COLORS.teal} />
-                <Text style={styles.sectionHeaderText}>Tes sorties hébergées</Text>
-              </View>
-            ) : null
-          }
-          renderItem={({ item }) => (
-            <EventCard
-              event={item}
-              onPress={() => router.push(`/event/${item.id}` as any)}
-            />
-          )}
+              ) : filter === 'hosted' && hostedEvents.length > 0 ? (
+                <View style={styles.sectionHeader}>
+                  <Feather name="star" size={14} color={COLORS.teal} />
+                  <Text style={styles.sectionHeaderText}>Tes sorties hébergées</Text>
+                </View>
+              ) : null
+            }
+            renderItem={({ item }) => (
+              <EventCard
+                event={item}
+                onPress={() => router.push(`/event/${item.id}` as any)}
+              />
+            )}
+          />
+        )}
+        <QRScannerModal
+          visible={showScanModal}
+          onClose={() => setShowScanModal(false)}
+          onJoined={(eventId) => {
+            setShowScanModal(false);
+            loadData(); // recharge la liste pour inclure le nouvel event
+            router.push(`/event/${eventId}` as any);
+          }}
         />
-      )}
-      <QRScannerModal
-        visible={showScanModal}
-        onClose={() => setShowScanModal(false)}
-        onJoined={(eventId) => {
-          setShowScanModal(false);
-          loadData(); // recharge la liste pour inclure le nouvel event
-          router.push(`/event/${eventId}` as any);
-        }}
-      />
-    </SafeAreaView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: COLORS.cream },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12, backgroundColor: COLORS.cream },
-  loadingText: { color: COLORS.muted, fontSize: 14 },
+  container: { flex: 1 },
+  safeArea: { 
+    flex: 1, 
+    marginTop: Platform.OS === 'ios' ? 12 : 36, 
+  },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
+  loadingText: { color: COLORS.muted, fontSize: 14, fontWeight: '500' },
   errorText: { color: COLORS.coral, fontSize: 14, textAlign: 'center', paddingHorizontal: 24 },
   retryBtn: { marginTop: 8, backgroundColor: COLORS.teal, borderRadius: 20, paddingHorizontal: 24, paddingVertical: 10 },
   retryBtnText: { color: COLORS.white, fontWeight: '700' },
 
   header: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  paddingHorizontal: 20,
-  paddingTop: 12,
-  paddingBottom: 8,
-},
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginTop: 16,
+    marginBottom: 16,
+  },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
     color: COLORS.teal,
     letterSpacing: -0.5,
+  },
+  scanButton: {
+    backgroundColor: '#FFFFFF',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
   },
 
   chipsRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 16,
     gap: 8,
   },
   chip: {
@@ -597,7 +626,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 999,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
+    borderColor: '#E8E5DC',
     backgroundColor: COLORS.white,
     gap: 5,
   },
@@ -605,7 +634,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.teal,
     borderColor: COLORS.teal,
   },
-  chipText: { fontSize: 13, fontWeight: '600', color: COLORS.muted },
+  chipText: { fontSize: 13, fontWeight: '700', color: COLORS.muted },
   chipTextActive: { color: COLORS.white },
   chipBadge: {
     minWidth: 18,
@@ -622,7 +651,7 @@ const styles = StyleSheet.create({
 
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 100,
+    paddingBottom: 40,
     gap: 12,
     flexGrow: 1,
   },
@@ -631,15 +660,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 4,
+    marginBottom: 6,
     paddingHorizontal: 2,
   },
   sectionHeaderText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: COLORS.teal,
     flex: 1,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -651,15 +679,15 @@ const styles = StyleSheet.create({
   },
   sectionBadgeText: { fontSize: 11, fontWeight: '700', color: COLORS.coral },
 
-  // ── Event Card ──
+  // ── Event Card Harmonisée (DA Coins à 20, ombres légères) ──
   card: {
     backgroundColor: COLORS.white,
     borderRadius: 20,
     padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.02,
+    shadowRadius: 10,
     elevation: 2,
   },
   liveBadge: {
@@ -684,7 +712,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   cardTitle: {
     flex: 1,
@@ -699,9 +727,9 @@ const styles = StyleSheet.create({
   },
   rolePillText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
 
-  cardMeta: { gap: 4, marginBottom: 10 },
+  cardMeta: { gap: 6, marginBottom: 12 },
   cardMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  cardMetaText: { fontSize: 13, color: COLORS.muted, flex: 1 },
+  cardMetaText: { fontSize: 13, color: COLORS.muted, flex: 1, fontWeight: '500' },
 
   cardFooter: {
     flexDirection: 'row',
@@ -709,19 +737,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    paddingTop: 10,
+    paddingTop: 12,
     marginTop: 2,
   },
   ttlPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#EAF7F6',
+    backgroundColor: '#E5F0ED',
     borderRadius: 10,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
   },
-  ttlPillText: { fontSize: 11, fontWeight: '600', color: COLORS.tealLight },
+  ttlPillText: { fontSize: 11, fontWeight: '700', color: COLORS.teal },
   viewButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -731,8 +759,10 @@ const styles = StyleSheet.create({
 
   // ── Invitation Card ──
   invitationCard: {
-    borderLeftWidth: 3,
+    borderLeftWidth: 4,
     borderLeftColor: COLORS.coral,
+    borderTopLeftRadius: 14,
+    borderBottomLeftRadius: 14,
   },
   invitationHeader: {
     flexDirection: 'row',
@@ -741,28 +771,27 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   invitationIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.coral + '22',
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: COLORS.coral + '15',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  invitationFrom: { fontSize: 12, color: COLORS.muted, marginBottom: 2 },
+  invitationFrom: { fontSize: 12, color: COLORS.muted, marginBottom: 2, fontWeight: '500' },
   invitationFromBold: { fontWeight: '700', color: COLORS.dark },
   invitationActions: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 4,
+    gap: 12,
+    marginTop: 8,
   },
   declineButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
-    borderWidth: 1.5,
-    borderColor: COLORS.coral,
+    gap: 6,
+    backgroundColor: '#FCEBEA',
     borderRadius: 10,
     paddingVertical: 9,
   },
@@ -772,7 +801,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 6,
     backgroundColor: COLORS.teal,
     borderRadius: 10,
     paddingVertical: 9,
@@ -784,34 +813,26 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 60,
+    paddingTop: 80,
     gap: 10,
   },
   emptyIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: COLORS.inputBg,
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: '#E5F0ED',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
   },
-  emptyTitle: { fontSize: 17, fontWeight: '700', color: COLORS.dark, textAlign: 'center' },
-  emptySub: { fontSize: 13, color: COLORS.muted, textAlign: 'center', paddingHorizontal: 32 },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: COLORS.dark, textAlign: 'center' },
+  emptySub: { fontSize: 13, color: COLORS.muted, textAlign: 'center', paddingHorizontal: 32, lineHeight: 18, fontWeight: '500' },
   emptyCta: {
     marginTop: 8,
     backgroundColor: COLORS.teal,
-    borderRadius: 999,
+    borderRadius: 12,
     paddingHorizontal: 24,
     paddingVertical: 10,
   },
   emptyCtaText: { color: COLORS.white, fontWeight: '700', fontSize: 14 },
-  scanButton: {
-  backgroundColor: COLORS.teal,
-  width: 38,
-  height: 38,
-  borderRadius: 12,
-  justifyContent: 'center',
-  alignItems: 'center',
-},
 });
