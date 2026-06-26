@@ -178,7 +178,6 @@ export default function EventDetailScreen() {
                 .from('event-photos')
                 .createSignedUrl(p.storage_path, 3600);
 
-              // Charge les réactions pour cette photo
               const { data: reactionsData } = await supabase
                 .from('reactions')
                 .select('emoji')
@@ -264,7 +263,6 @@ export default function EventDetailScreen() {
 
   async function sendEventInvitation(friend: FriendProfile) {
     if (!id || !currentUserId || !event) return;
-
     setInvitingFriendId(friend.id);
 
     try {
@@ -300,7 +298,6 @@ export default function EventDetailScreen() {
 
   function handleInviteFriend(friend: FriendProfile) {
     if (!event) return;
-
     Alert.alert(
       'Inviter un ami',
       `Envoyer une invitation à @${friend.username} pour rejoindre « ${event.name} » ?`,
@@ -355,8 +352,6 @@ export default function EventDetailScreen() {
 
     try {
       const ext = (uri.substring(uri.lastIndexOf('.') + 1) || 'jpeg').toLowerCase();
-
-      // Structure attendue par la policy storage : {event_id}/{user_id}/{filename}
       const fileName = `${id}/${currentUserId}/${Date.now()}.${ext}`;
 
       const base64 = await FileSystem.readAsStringAsync(uri, {
@@ -403,79 +398,6 @@ export default function EventDetailScreen() {
     }
   }
 
-  // Ajoute cette fonction après handlePhotoLongPress
-
-async function handlePhotoLongPress(photoId: string) {
-  if (!currentUserId) return;
-
-  try {
-    // Vérifie si l'utilisateur a déjà réagi à cette photo
-    const { data: existingReaction } = await supabase
-      .from('reactions')
-      .select('emoji')
-      .eq('photo_id', photoId)
-      .eq('user_id', currentUserId)
-      .maybeSingle();
-
-    if (existingReaction) {
-      // L'utilisateur a déjà réagi
-      Alert.alert(
-        'Réaction existante',
-        `Tu as déjà réagi avec ${existingReaction.emoji}. Veux-tu la changer ?`,
-        [
-          { text: 'Non', style: 'cancel' },
-          {
-            text: 'Oui, changer',
-            onPress: () => showReactionOptions(photoId, true),
-          },
-        ]
-      );
-    } else {
-      // L'utilisateur n'a pas encore réagi
-      showReactionOptions(photoId, false);
-    }
-  } catch (error: any) {
-    Alert.alert('Erreur', error.message);
-  }
-}
-
-function showReactionOptions(photoId: string, isReplacing: boolean) {
-    Alert.alert(
-      'Ajouter une réaction',
-      isReplacing ? 'Choisissez un nouvel emoji' : 'Choisissez un emoji pour réagir en direct',
-      [
-        { text: '❤️', onPress: () => addReactionToDatabase(photoId, '❤️', isReplacing) },
-        { text: '🔥', onPress: () => addReactionToDatabase(photoId, '🔥', isReplacing) },
-        { text: '😂', onPress: () => addReactionToDatabase(photoId, '😂', isReplacing) },
-        { text: '🙌', onPress: () => addReactionToDatabase(photoId, '🙌', isReplacing) },
-        { text: 'Annuler', style: 'cancel' },
-      ]
-    );
-  }
-
-  async function addReactionToDatabase(photoId: string, emoji: string, isReplacing: boolean) {
-    if (!currentUserId) return;
-
-    try {
-      if (isReplacing) {
-        await supabase.from('reactions').delete().eq('photo_id', photoId).eq('user_id', currentUserId);
-      }
-
-      // Insère la nouvelle réaction
-      const { error } = await supabase.from('reactions').insert({
-        photo_id: photoId,
-        user_id: currentUserId,
-        emoji: emoji,
-      });
-
-      if (error) throw error;
-
-      await loadEventData();
-    } catch (error: any) {
-      Alert.alert('Erreur', error.message);
-    }
-  }
-
   const isHost = event?.host_id === currentUserId;
   const isMember = members.some((m) => m.user_id === currentUserId);
 
@@ -489,7 +411,7 @@ function showReactionOptions(photoId: string, isReplacing: boolean) {
 
   return (
     <LinearGradient colors={[COLORS.bgLight, COLORS.bgCream]} style={styles.container}>
-      {/* Header — padding top renforcé pour ne jamais être coupé par la status bar */}
+      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.iconButton}>
           <Feather name="arrow-left" size={18} color={COLORS.teal} />
@@ -525,6 +447,7 @@ function showReactionOptions(photoId: string, isReplacing: boolean) {
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        
         {/* Modal QR Code intégré */}
         {showQRModal && (
           <View style={styles.qrCard}>
@@ -684,33 +607,28 @@ function showReactionOptions(photoId: string, isReplacing: boolean) {
               <Text style={styles.galleryEmptyText}>Aucun cliché live pour l'instant.</Text>
             </View>
           ) : (
-            <View style={styles.photoGrid}>
-              {photos.map((p) => {
-                // Compte les réactions pour cette photo
-                const reactionCounts = (p.reactions || []).reduce((acc: Record<string, number>, emoji: string) => {
-                  acc[emoji] = (acc[emoji] || 0) + 1;
-                  return acc;
-                }, {});
-                const reactionEmojis = Object.keys(reactionCounts).join('');
+            <>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.previewRow}>
+                {photos.slice(0, 5).map((p) => (
+                  <Image key={p.id} source={{ uri: p.photo_url }} style={styles.previewThumb} />
+                ))}
+                {photos.length > 5 && (
+                  <View style={styles.previewMore}>
+                    <Text style={styles.previewMoreText}>+{photos.length - 5}</Text>
+                  </View>
+                )}
+              </ScrollView>
 
-                return (
-                  <TouchableOpacity
-                    key={p.id}
-                    activeOpacity={0.8}
-                    onLongPress={() => handlePhotoLongPress(p.id)}
-                    style={styles.photoContainer}
-                  >
-                    <Image source={{ uri: p.photo_url }} style={styles.photoItemCompact} />
-
-                    {reactionEmojis && (
-                      <View style={styles.reactionBadgeRow}>
-                        <Text style={styles.reactionBadgeText}>{reactionEmojis}</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+              <TouchableOpacity
+                style={styles.openGalleryBtn}
+                onPress={() => router.push(`/event/${id}/gallery`)}
+              >
+                <Feather name="maximize-2" size={16} color={COLORS.white} />
+                <Text style={styles.openGalleryBtnText}>
+                  Ouvrir la galerie ({photos.length})
+                </Text>
+              </TouchableOpacity>
+            </>
           )}
 
           <View style={styles.actionRow}>
@@ -730,7 +648,12 @@ function showReactionOptions(photoId: string, isReplacing: boolean) {
               )}
             </TouchableOpacity>
           </View>
-          <Text style={styles.hintText}>💡 Reste appuyé longuement sur une photo pour y ajouter une réaction emoji.</Text>
+
+          {photos.length > 0 && (
+            <Text style={styles.hintText}>
+              Galerie complète : zoom, réactions et téléchargement sur ton téléphone.
+            </Text>
+          )}
         </View>
       </ScrollView>
 
@@ -754,7 +677,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingBottom: 32, gap: 14 },
+  scrollContent: { paddingHorizontal: 16, paddingBottom: 100, gap: 14 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -860,11 +783,27 @@ const styles = StyleSheet.create({
   hostAvatarBorder: { borderColor: COLORS.coral, borderWidth: 2 },
   avatarLetter: { fontSize: 14, fontWeight: '800', color: COLORS.teal },
   memberMiniName: { fontSize: 10, fontWeight: '600', color: COLORS.dark, textAlign: 'center' },
-  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingVertical: 4 },
-  photoContainer: { position: 'relative' },
-  photoItemCompact: { width: 90, height: 90, borderRadius: 14, backgroundColor: COLORS.inputBg },
-  reactionBadgeRow: { position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(255,255,255,0.9)', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 8 },
-  reactionBadgeText: { fontSize: 10 },
+  previewRow: { gap: 8, paddingVertical: 4 },
+  previewThumb: { width: 72, height: 72, borderRadius: 12, backgroundColor: COLORS.inputBg },
+  previewMore: {
+    width: 72,
+    height: 72,
+    borderRadius: 12,
+    backgroundColor: 'rgba(51, 92, 88, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewMoreText: { fontSize: 14, fontWeight: '800', color: COLORS.teal },
+  openGalleryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.teal,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  openGalleryBtnText: { color: COLORS.white, fontWeight: '700', fontSize: 14 },
   galleryEmpty: { alignItems: 'center', paddingVertical: 20, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 14 },
   galleryEmptyText: { fontSize: 12, color: COLORS.muted, fontStyle: 'italic' },
   actionRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
