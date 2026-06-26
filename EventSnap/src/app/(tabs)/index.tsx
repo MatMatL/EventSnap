@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: '#FFF0EC', // Harmonisé avec tes bannières d'alertes
+    backgroundColor: '#FFF0EC',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#FFCDC0',
