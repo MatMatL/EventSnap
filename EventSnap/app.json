@@ -8,7 +8,10 @@
     "scheme": "eventsnap",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "EventSnap utilise votre position pour afficher les sorties à proximité sur la carte."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -17,6 +20,10 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -27,10 +34,9 @@
       "expo-router",
       [
         "expo-location",
-        
         {
           "locationAlwaysAndWhenInUsePermission": "EventSnap utilise votre position pour localiser vos événements.",
-          "locationWhenInUsePermission": "EventSnap utilise votre position pour localiser vos événements."
+          "locationWhenInUsePermission": "EventSnap utilise votre position pour afficher les sorties à proximité sur la carte."
         }
       ],
       [

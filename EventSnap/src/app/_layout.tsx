@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useRouter, Slot } from 'expo-router';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 export default function RootLayout() {
   const router = useRouter();
@@ -29,13 +30,15 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (!ready) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF8E7' }}>
-        <ActivityIndicator color="#335C58" size="large" />
-      </View>
-    );
-  }
-
-  return <Slot />;
+  return (
+    <SafeAreaProvider>
+      {!ready ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF8E7' }}>
+          <ActivityIndicator color="#335C58" size="large" />
+        </View>
+      ) : (
+        <Slot />
+      )}
+    </SafeAreaProvider>
+  );
 }

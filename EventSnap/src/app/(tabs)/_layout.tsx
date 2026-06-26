@@ -17,6 +17,7 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Map',
+          headerShown: false,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'map' : 'map-outline'} size={22} color={color} />
           ),
