@@ -39,12 +39,15 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "patch-package": "^8.0.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "start": "expo start",
+    "start": "expo start --dev-client",
+    "start:go": "expo start --go",
+    "postinstall": "patch-package",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
+    "android": "expo run:android",
     "android:dev": "expo run:android",
     "ios": "expo start --ios",
     "ios:dev": "expo run:ios",
