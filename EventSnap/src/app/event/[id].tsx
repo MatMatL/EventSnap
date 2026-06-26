@@ -23,12 +23,8 @@ import { supabase } from '../../lib/supabase';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 import { decode } from 'base64-arraybuffer';
+import QRCode from 'react-native-qrcode-svg';
 import QRScannerModal from '../../components/QRScannerModal';
-
-let QRCode: any = null;
-if (Platform.OS !== 'web') {
-  QRCode = require('react-native-qrcode-svg').default;
-}
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -589,18 +585,12 @@ export default function EventDetailScreen() {
             <Text style={styles.qrSubtitle}>Scannez ce code pour rejoindre instantanément et uploader vos photos.</Text>
 
             <View style={styles.qrCodeWrapper}>
-              {Platform.OS === 'web' ? (
-                <Text style={{ textAlign: 'center', fontSize: 12, color: COLORS.muted }}>
-                  QR Code indisponible sur la version Web.
-                </Text>
-              ) : QRCode ? (
-                <QRCode
-                  value={`myapp://event/join?id=${event?.id}`}
-                  size={140}
-                  color={COLORS.teal}
-                  backgroundColor={COLORS.white}
-                />
-              ) : null}
+              <QRCode
+                value={`myapp://event/join?id=${event?.id}`}
+                size={140}
+                color={COLORS.teal}
+                backgroundColor={COLORS.white}
+              />
             </View>
             <Text style={styles.qrCodeId}>
               ID: {event ? event.id.substring(0, 8).toUpperCase() : '------'}
