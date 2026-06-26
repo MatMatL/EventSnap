@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { View, Platform, StyleSheet } from 'react-native';
 
 export default function TabsLayout() {
@@ -60,6 +60,7 @@ export default function TabsLayout() {
           ),
         }}
       />
+      
     </Tabs>
   );
 }
