@@ -36,7 +36,7 @@
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "EventSnap utilise votre position pour localiser vos événements.",
-          "locationWhenInUsePermission": "EventSnap utilise votre position pour localiser vos événements."
+          "locationWhenInUsePermission": "EventSnap utilise votre position pour afficher les sorties à proximité sur la carte."
         }
       ],
       [
@@ -50,9 +50,9 @@
         }
       ],
       [
-        "expo-location",
+        "expo-camera",
         {
-          "locationWhenInUsePermission": "EventSnap utilise votre position pour afficher les sorties à proximité sur la carte."
+          "cameraPermission": "Autorisez l'accès caméra pour scanner les QR codes d'événements."
         }
       ]
     ],

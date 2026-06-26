@@ -60,6 +60,13 @@ export default {
           },
         },
       ],
+      [
+        'expo-camera',
+        {
+          cameraPermission:
+            "Autorisez l'accès caméra pour scanner les QR codes d'événements.",
+        },
+      ],
     ],
     experiments: {
       typedRoutes: true,
