@@ -485,7 +485,7 @@ export default function EventsScreen() {
         {/* ── Header ── */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>
-            EventSnap <Text style={{ fontWeight: '400', fontSize: 24 }}>Events</Text>
+            EventSnap <Text style={{ fontWeight: '400', fontSize: 24 }}>Evenements</Text>
           </Text>
           <TouchableOpacity 
             style={styles.scanButton} 

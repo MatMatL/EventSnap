@@ -136,7 +136,7 @@ export default function ProfileScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           
                   <View style={styles.topBar}>
-                    <Text style={styles.topLogo}>EventSnap <Text style={{fontWeight: '400', fontSize: 20}}>Profile</Text></Text>
+                    <Text style={styles.topLogo}>EventSnap <Text style={{fontWeight: '400', fontSize: 20}}>Profil</Text></Text>
                     <TouchableOpacity style={styles.iconButton}>
                       <Ionicons name="refresh-outline" size={20} color="#335C58" />
                     </TouchableOpacity>
