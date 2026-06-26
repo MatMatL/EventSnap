@@ -34,7 +34,6 @@ export default {
     },
     plugins: [
       'expo-router',
-      'expo-dev-client',
       [
         'expo-location',
         {
